@@ -41,7 +41,7 @@ class ConvAutoEncoder(nn.Module):
         Args:
           x_dim: tuple
             Input dimensions (channels (depth), length)
-          l_dim: int
+          latent_dim: int
             latent dimension, bottleneck dimension
           n_kernels: int
             Number of filters (number of output channels)

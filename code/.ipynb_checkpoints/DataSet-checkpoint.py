@@ -10,9 +10,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as transform
 from typing import Callable, Union, Optional, Tuple, Dict, List
-from utils import *
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import SubsetRandomSampler
 import tractogramReader as tr
 
 

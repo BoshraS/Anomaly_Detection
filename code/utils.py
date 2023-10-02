@@ -9,6 +9,8 @@ from joblib import cpu_count
 from sklearn.cluster import KMeans
 import time
 from sklearn.cluster import MiniBatchKMeans
+import tractogramReader as tr
+import nibabel as nib
 
 
 def set_device():
@@ -21,7 +23,6 @@ def set_device():
 
 def min_dist(sample, trainData_to_Lspace):
     return torch.nn.functional.pairwise_distance(sample,trainData_to_Lspace).min()
-    
 
 def seed_all(seed: int = 42):
     
@@ -65,7 +66,6 @@ def visualise_tck(tck_org, tck_recon):
     ax.scatter(x2, y2, z2, s=400, c=z2)
     ax.plot(x2, y2, z2, color='red', linewidth=20)
     plt.show()
-    
     return 0
 
 def streamline_len(strm):
@@ -79,7 +79,6 @@ def streamline_len(strm):
         z1 = strm[2, i]
         z2 = strm[2, i+1]
         lengths[i] = np.sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2)
-
     return np.sum(lengths)
 
 def plot_ranked_comparison(measure1: np.ndarray, measure2: np.ndarray, label1: str = 'x', label2: str = 'y'):
@@ -93,13 +92,12 @@ def plot_ranked_comparison(measure1: np.ndarray, measure2: np.ndarray, label1: s
     g.ax_joint.scatter(measure1, measure2)
     g.set_axis_labels(xlabel=label1, ylabel=label2, size=15)
     return g
-
     
-def encode_strms(model, streamlines, batch_size, device, RANDOM_SEED=42):
-    seed_all(RANDOM_SEED)
+def encode_strms(model, streamlines, batch_size, device, random_seed=42):
+    seed_all(random_seed)
     with torch.no_grad():
         temp = []
-        seed_all(seed=RANDOM_SEED)
+        seed_all(seed=random_seed)
         inp_batched = torch.split(streamlines, batch_size)
         for batch_id, strm_coor_batch in enumerate(inp_batched):
             strm_coor_batch = strm_coor_batch.to(device)
@@ -109,7 +107,6 @@ def encode_strms(model, streamlines, batch_size, device, RANDOM_SEED=42):
                 continue
             temp = torch.cat((temp,strm_coor_batch_encode.detach()))
     return temp
-
 
 def MDF_strms_dist(strm1, strm2):
     
@@ -124,7 +121,6 @@ def MDF_strms_dist(strm1, strm2):
         z2 = strm2[2, i]
         direct_dists[i] = torch.sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2)
     direct_dist = direct_dists.mean()
-    
     # computing the flipped distance
     flipped_dists = torch.zeros(strm1.shape[1],)
     strm2 = torch.flip(strm2, [1])
@@ -140,18 +136,18 @@ def MDF_strms_dist(strm1, strm2):
     
     return min(direct_dist,flipped_dist)
 
-def kmeans_clustering(LS, num_clusters, out_file_name):
-    start = time.time()
-    km = KMeans(n_clusters=num_clusters, random_state=0, verbose=True, max_iter=1000).fit(LS.cpu())
-    centers = km.cluster_centers_
-    np.save(out_file_name,centers)
-    print("Runtime: %s seconds" % (time.time() - start))
+def reconstruct_clusterCenters(model, output_recTCK, cluster_centers, res=32, device='cpu'):
+    model.to(device)
+    model.eval()
+    def nextStreamline():
+        for i in range(np.size(cluster_centers,0)):
+            clusterC_latent  = cluster_centers[i:i+1,:]
+            with torch.no_grad():
+                latent  = torch.from_numpy(clusterC_latent).to(device)
+                trk     = model.decode(latent).numpy().reshape([3, res]).astype(np.float32).transpose()
+                yield trk
     
+    trk_out = nib.streamlines.tck.TckFile(nib.streamlines.tractogram.LazyTractogram(nextStreamline,None ,None ,np.eye(4,4)))
+    trk_out.save(output_recTCK)
 
-def miniBatch_kmeans_clustering(LS, num_clusters, out_file_name, batch_size=1024):
-    
-    start = time.time()
-    km = MiniBatchKMeans(n_clusters=num_clusters, random_state=0, batch_size=batch_size, verbose=True).fit(LS.cpu())
-    centers = km.cluster_centers_
-    np.save(out_file_name,centers)
-    print("Runtime: %s seconds" % (time.time() - start))
+

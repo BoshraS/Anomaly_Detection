@@ -6,7 +6,8 @@ import time
 import torch
 from joblib import cpu_count
 from sklearn.cluster import MiniBatchKMeans
-def main():
+
+def kmeans(latent_space_loader):
     latent_space_loader = torch.load('HCP_38sub_N256_MSEL_64ld_latentSpace.pt', map_location=torch.device('cpu'))
     latent_space_loader = torch.reshape(latent_space_loader,(latent_space_loader.shape[0], latent_space_loader.shape[1])).numpy()
 
@@ -18,5 +19,3 @@ def main():
 
     print("Runtime: %s seconds" % (time.time() - start))
 
-if __name__== "__main__":
-      main();
