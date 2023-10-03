@@ -14,7 +14,7 @@
 
 #SBATCH --time=3-00:00:00
 
-#SBATCH --output=/dhc/home/boshra.shams/ISMRM_GT.log 
+#SBATCH --output=/dhc/home/boshra.shams/ISMRM_GT_anomaly.log 
 
 model_path=../../code/saved_model/AE45.pth
 MNI_template=../../code/MNI152_T1_1mm_brain.nii.gz

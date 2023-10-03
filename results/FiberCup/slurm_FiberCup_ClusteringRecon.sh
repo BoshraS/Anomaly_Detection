@@ -14,6 +14,6 @@
 
 #SBATCH --time=3-00:00:00
 
-#SBATCH --output=/dhc/home/boshra.shams/Ismrm_clustering.log 
+#SBATCH --output=/dhc/home/boshra.shams/FiberCup_clustering.log 
 
-python ISMRM_ClusteringRecon.py
+python FiberCup_ClusteringRecon.py

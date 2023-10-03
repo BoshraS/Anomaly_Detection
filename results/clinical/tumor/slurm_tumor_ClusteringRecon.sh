@@ -14,6 +14,6 @@
 
 #SBATCH --time=3-00:00:00
 
-#SBATCH --output=/dhc/home/boshra.shams/Ismrm_clustering.log 
+#SBATCH --output=/dhc/home/boshra.shams/tumor_clustering.log 
 
-python ISMRM_ClusteringRecon.py
+python tumor_ClusteringRecon.py
