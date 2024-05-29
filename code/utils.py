@@ -11,6 +11,7 @@ import time
 from sklearn.cluster import MiniBatchKMeans
 import tractogramReader as tr
 import nibabel as nib
+from tqdm import tqdm
 
 
 def set_device():
@@ -107,6 +108,30 @@ def encode_strms(model, streamlines, batch_size, device, random_seed=42):
                 continue
             temp = torch.cat((temp,strm_coor_batch_encode.detach()))
     return temp
+
+def read_encode_tractogram(model, inp_tractogram, encoded_inp_tractogram, batch_size, device):
+    # model : already load model
+    # inp_tractogram : path to a tractogram to read
+    # encoded_inp_tractogram : encoded tractogram location
+
+    tck = tr.T(inp_tractogram.encode("utf-8"))
+    numberOfStreamlines = tck.cntStreamline()
+    streamlines = torch.empty((numberOfStreamlines, 3, 256), dtype=torch.float32, device=device)
+    
+    # read tractogram
+    
+    for i in tqdm(range(numberOfStreamlines)):
+        streamline = np.asarray(tck.read(i)).astype(np.float32).transpose(1, 0)
+        streamlines[i] = torch.from_numpy(streamline).to(device)
+        
+    # encode tractogram    
+    
+    streamlines_encoded = encode_strms(model, streamlines, batch_size, device, random_seed=42)
+    
+    # Save the encoded streamlines
+    torch.save(streamlines_encoded.cpu(), encoded_inp_tractogram)
+    
+    return streamlines_encoded
 
 def MDF_strms_dist(strm1, strm2):
     
