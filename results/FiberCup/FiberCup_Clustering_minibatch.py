@@ -19,6 +19,9 @@ from clustering import Kmeans
 
 def main():
     
+    model_path = sys.argv[1]
+    dataset_path = sys.argv[2]
+    
     device = set_device()
     RANDOM_SEED = 42
     res = 256
@@ -29,10 +32,7 @@ def main():
     batch_size = 256
     kmeans_batchSize= 1024
 
-    dataset_path = 'FiberCup_GT/groundTruth_MNI_N256.tck'
     tractogram = tr.T(dataset_path.encode("utf-8"))
-    model_path = '../../code/saved_model/AE45.pth'
-
     model = ConvAE_256res.ConvAutoEncoder(x_dim=data_shape, latent_dim=latent_dim, n_kernels=n_kernels, kernel_size=kernel_size)
     model.load_state_dict(torch.load(model_path)) 
     model.to(device)
@@ -52,14 +52,13 @@ def main():
         kmeans_model = Kmeans.MiniBatchKMeansCluster(n_clusters=c, batch_size=kmeans_batchSize, random_state=0)
         kmeans_model.fit(LS.cpu())
         centers = kmeans_model.get_cluster_centers()
-        clusters_out_file = 'FiberCup_Clustering/FiberCup_GT_'+str(c)+'clusters'
+        clusters_out_file = 'FiberCup_GT_Clusters/kmeans/FiberCup_GT_'+str(c)+'clusters'
         centers.astype(np.float32).tofile(clusters_out_file)
     print("Runtime: %s seconds" % (time.time() - start))
     
-    n_clusters = [3, 5, 7, 10, 100]
     for _, c in enumerate(n_clusters):
-        output_recTCK_path = 'FiberCup_Clustering/FiberCup_GT_'+str(c)+'clusters_rectTCK.tck'
-        cluster_centers_path = 'FiberCup_Clustering/FiberCup_GT_'+str(c)+'clusters'
+        output_recTCK_path = 'FiberCup_GT_Clusters/kmeans/FiberCup_GT_'+str(c)+'clusters_rectTCK.tck'
+        cluster_centers_path = 'FiberCup_GT_Clusters/kmeans/FiberCup_GT_'+str(c)+'clusters'
         cluster_centers = np.fromfile(cluster_centers_path, dtype=np.float32)
         cluster_centers = cluster_centers.reshape(-1,64)
         #cluster_centers = torch.from_numpy(cluster_centers).to(device)
