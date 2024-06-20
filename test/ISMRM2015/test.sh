@@ -4,7 +4,7 @@ echo "Running ISMRM 2015 challange data example"
 
 anomap=../../build/anomap
 
-inp=ISMRM2015_MNI
+inp=ISMRM2015_MNI_4mm
 
 ${anomap} encode -f \
 ${inp}.vtk \
