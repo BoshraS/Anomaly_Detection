@@ -46,23 +46,36 @@ Step 3. Run the `build.sh` script
 # Path to anomap executable
 anomap=build/install/anomap
 
-ref=/data/ref          # Input folder containing reference tractograms
-latent=/data/refLatent # Output folder for latent representations
-cluster=/data/cluster  # Output path for cluster centers
+# Compute latent representations
 
-input=/data/input.vtk       # Input tractogram for anomaly scoring
-output=/data/output         # Output path for anomaly scoring
-template=/data/temp.nii.gz  # Template image for the output anomaly image
+ref=/data/ref                      # Input folder containing reference tractograms
+latent=/data/refLatent             # Output folder for latent representations
 
-# Compute and save latent representations
 ${anomap} encode ${ref} ${latent}
 
-# Compute and save cluster centers
-# e.g. with a max distance of ~20 mm between cluster centers
-${anomap} findClusterCenters ${latent} ${cluster} --maxDist 20
 
-# Compute and save the anomaly scores and the mapping
-${anomap} scoreAndMap ${input} ${cluster}.bin -t ${template} ${output}
+# Compute cluster centers
+# e.g. with a max distance of ~20 mm between cluster centers
+
+clusterCenters=/data/clusters.clc  # Output path for cluster centers
+clusterLabels=/data/clusters.clb   # Output path for cluster labels
+
+${anomap} findClusterCenters ${latent} ${clusterCenters} ${clusterLabels} --maxDist 20
+
+
+# Compute anomaly scores
+
+input=/data/input.vtk        # Input tractogram for anomaly scoring
+output=/data/output          # Output prefix
+
+${anomap} score ${input} ${clusters} ${output}.ano
+
+
+# Map anomaly scores and cluster labels on tractogram
+${anomap} toTrack ${input} -s ${output}.ano -l ${output}.clc ${output}.vtk
+
+# Map anomaly scores on an image
+${anomap} toImg ${input} ${output}.ano ${output}.nii.gz
 
 ```
 
