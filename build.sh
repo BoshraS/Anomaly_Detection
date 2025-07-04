@@ -5,9 +5,12 @@ buildType=Release #Release or Debug
 buildShared=OFF
 buildDir=build
 
-Torch_DIR="/opt/libtorch-cuda/share/cmake/Torch"
-inc_path="../nibrary/build-static/install/include/nibrary_v0.1"
-lib_path="../nibrary/build-static/install/lib/nibrary_v0.1"
+Torch_DIR="/opt/libtorch/share/cmake/Torch"
+#inc_path="../nibrary/build-static/install/include/nibrary_v0.1"
+#lib_path="../nibrary/build-static/install/lib/nibrary_v0.1"
+
+inc_path="./nibrary/build-static/install/include/nibrary_v0.1.0"
+lib_path="./nibrary/build-static/install/lib/nibrary_v0.1.0"
 
 c_compiler=/bin/gcc-12
 cxx_compiler=/bin/g++-12
