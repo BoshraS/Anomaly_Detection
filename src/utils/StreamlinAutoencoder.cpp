@@ -1,10 +1,10 @@
 #include "cmd/cmd.h"
-#include "utils.h"
+#include "StreamlineAutoencoder.h"
 
 using namespace NIBR;
 
 // Common initialization method
-void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, int _latDim, float _distScaler, bool _useCPU) {
+void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, int _latDim, const std::string& dataType, double _distScaler, bool _useCPU) {
 
     moduleFile  = _moduleFile;
     inpDim      = _inpDim;
@@ -13,6 +13,7 @@ void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, in
     useCPU      = _useCPU;
     ready       = false;
 
+    // Set device
     device      = torch::kCPU;
     if (!useCPU && torch::cuda::is_available()) {
         device = torch::Device(torch::kCUDA);
@@ -21,6 +22,25 @@ void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, in
         disp(MSG_DETAIL,"Using CPU");
     }
 
+    // Set data type
+    if (dataType == "float64" || dataType == "double") {
+        this->dtype = torch::kFloat64;
+        disp(MSG_DETAIL, "Model data type set to: double (float64)");
+    } else if (dataType == "float32" || dataType == "float") {
+        this->dtype = torch::kFloat32;
+        disp(MSG_DETAIL, "Model data type set to: float (float32)");
+    } else if (dataType == "float16" || dataType == "half") {
+        this->dtype = torch::kFloat16;
+        disp(MSG_DETAIL, "Model data type set to: half (float16)");
+    } else {
+        this->dtype = torch::kFloat32; // Default to float32
+        if (!dataType.empty()) {
+            disp(MSG_WARN, "Unknown data type '%s'. Defaulting to float32.", dataType.c_str());
+        }
+    }
+    
+
+    // Set other parameters
     if (moduleFile.empty()) {
         std::filesystem::path curPath = std::filesystem::absolute(__FILE__);
         std::filesystem::path parentPath = curPath.parent_path().parent_path().parent_path();
@@ -46,21 +66,22 @@ void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, in
     try {
         disp(MSG_DETAIL,"Loading model %s", moduleFile.c_str());
         module = torch::jit::load(moduleFile);
-        module.to(device);
+        module.to(device, dtype);
+        module.eval();
         ready = true;
     } catch (const c10::Error& e) {
-        disp(MSG_DETAIL,"Error loading the model");
+        disp(MSG_ERROR,"Error loading the model: %s", e.what());
         ready = false;
     }
 }
 
 
-StreamlineAutoencoder::StreamlineAutoencoder(const std::tuple<std::string, int, int>& moduleSpec, bool _useCPU)
+StreamlineAutoencoder::StreamlineAutoencoder(const std::tuple<std::string, int, int, std::string>& moduleSpec, bool _useCPU)
     : device(torch::kCPU), useCPU(_useCPU), ready(false) {
-    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), 1.0f, _useCPU);
+    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), std::get<3>(moduleSpec), 1.0f, _useCPU);
 }
 
-StreamlineAutoencoder::StreamlineAutoencoder(const std::tuple<std::string, int, int, float>& moduleSpec, bool _useCPU)
+StreamlineAutoencoder::StreamlineAutoencoder(const std::tuple<std::string, int, int, std::string, double>& moduleSpec, bool _useCPU)
     : device(torch::kCPU), useCPU(_useCPU), ready(false) {
-    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), std::get<3>(moduleSpec), _useCPU);
+    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), std::get<3>(moduleSpec), std::get<4>(moduleSpec), _useCPU);
 }

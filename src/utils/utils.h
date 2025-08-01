@@ -1,42 +1,7 @@
 #pragma once
 #include "nanoflann.hpp"
 #include <Eigen/Dense>
-
-class StreamlineAutoencoder {
-
-    public:
-        std::string moduleFile;             // Path to Torch script module file
-        torch::jit::script::Module module;  // Torch script module
-        int inpDim;                         // input model dimension < 3 x inpDim>
-        int latDim;                         // latent space dimension
-        float distScaler;                   // scaling factor to match real-space distance (this value can be obtained with the modelTest command)
-        torch::Device device;               // CPU / GPU
-        bool useCPU{false};
-        bool ready{false};
-
-        StreamlineAutoencoder(const std::tuple<std::string,int,int>&       _moduleSpec, bool _useCPU);
-        StreamlineAutoencoder(const std::tuple<std::string,int,int,float>& _moduleSpec, bool _useCPU);
-
-        bool isReady() {return ready;}
-
-    private:
-        void init(const std::string& _moduleFile, int _inpDim, int _latDim, float _distScaler, bool _useCPU);
-
-};
-
-// Encoder
-std::vector<std::vector<float>> encodeStreamlines(                          // output latent representations <number of streamlines x latDim>
-    const std::vector<std::vector<std::vector<float>>>& streamlines,        // input tractogram <number of streamlines x (variable) number of points x 3>
-    StreamlineAutoencoder& model,                                           // model
-    int batchSize                                                           // batch-size
-    );
-
-// Decoder
-std::vector<std::vector<std::vector<float>>> decodeStreamlines(             // output tractogram <number of streamlines x (fixed) inpDim x 3>
-    const std::vector<std::vector<float>>& latent,                          // input latent representations <number of streamlines x latDim>
-    StreamlineAutoencoder& model,                                           // model
-    int batchSize                                                           // batch-size
-    );
+#include "StreamlineAutoencoder.h"
 
 // inp:   path to input file containing latent representations of streamlines
 // out:   path to output tractogram file to save
@@ -47,6 +12,8 @@ bool decodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
 // out:   path to output file containing latent representations of streamlines
 // force: if true, overwrites out if it already exists
 bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoencoder& model, int batchSize);
+
+
 
 // Used for KD-tree for clustering and scoring 
 struct PointCloud {

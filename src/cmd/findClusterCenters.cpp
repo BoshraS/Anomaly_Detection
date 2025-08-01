@@ -6,7 +6,7 @@ namespace CMDARGS_FINDCLUSTERCENTERS {
     std::string  inp_path;
     std::string  out_path;
 
-    std::tuple<std::string, int, int, float> model_spec("", 0, 0, 1.0f); // module_path, inp_dim, lat_dim, distance scaler
+    std::tuple<std::string, int, int, std::string, double> model_spec("", 0, 0, "", 1.0); // module_path, inp_dim, lat_dim, data type, distance scaler
 
     float  maxDist;
     int    maxIteration     = 0;
@@ -455,7 +455,7 @@ void findClusterCenters(CLI::App* app)
     app->add_option("<output>",              out_path,           "Output latent representations of cluster centers (.clc).")
         ->required();
 
-    app->add_option("--model,-m",            model_spec,         "Input model, specified with the path to the Torch script file, followed by the input dimensions, latent space dimensions, and distance scaling factor of the model. E.g. /model/test_model.pt 256 64 0.08. The distance scaler factor of the model can be obtained using the \"modelTest\" command.");
+    app->add_option("--model,-m",            model_spec,         "Input model, specified with the path to the Torch script file, followed by the input dimensions, latent space dimensions, data type (float or double), and distance scaling factor of the model. E.g. /model/test_model.pt 256 64 float 0.08. The distance scaler factor of the model can be obtained using the \"modelTest\" command.");
 
     app->add_option("--maxDist, -d",         maxDist,            "Maximum distance from any cluster center.")
         ->required();
