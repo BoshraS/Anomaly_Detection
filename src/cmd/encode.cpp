@@ -45,7 +45,9 @@ void run_encode()
     if (!model.isReady()) return;
 
     if (isFile) {
+        std::cout << "starting encodeandsave" << std::endl;
         encodeAndSave(inp_path,out_path,!skip,model,batchSize);
+        std::cout << "finished encodeandsave" << std::endl;
         return;
     }
 

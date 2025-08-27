@@ -11,3 +11,5 @@ void findClusterCenters(CLI::App* app);
 void score(CLI::App* app);
 void toTrack(CLI::App* app);
 void toImg(CLI::App* app);
+
+void compareSpeed(CLI::App* app);

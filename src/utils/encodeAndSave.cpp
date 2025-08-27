@@ -49,6 +49,8 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
 
         NIBR::MT::MTRUN(batchCnt, "Encoding streamlines", run);
 
+        std::cout << "encoding finished "<< std::endl;
+
         for (const auto& encoded_batch : results) {
             for (const auto& encoded_streamline : encoded_batch) {
                 ofs.write(reinterpret_cast<const char*>(encoded_streamline.data()), 2 * model.latDim * sizeof(T));
@@ -61,10 +63,12 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
             disp(MSG_ERROR, "Failed to rename temporary file.");
             return false;
         }
+        std::cout << "just before return" << std::endl;
         return true;
     };
 
     // Dispatch to the generic lambda with the correct type
+    std::cout << "dtype: " << model.dtype << std::endl;
     if (model.dtype == torch::kFloat) {
         return process_with_type(float{});
     } else if (model.dtype == torch::kDouble) {

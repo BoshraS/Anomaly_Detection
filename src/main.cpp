@@ -23,6 +23,7 @@ int main(int argc, char *argv[]) {
     toTrack(app.add_subcommand("toTrack", ""));
     toImg(app.add_subcommand("toImg", ""));
     modelTest(app.add_subcommand("modelTest", ""));
+    compareSpeed(app.add_subcommand("compareSpeed", ""));
 
     disp(MSG_DEBUG, "Parsing input");
 
