@@ -42,7 +42,7 @@ void run_toTrack()
     }
 
     // Read number of streamlines from tractogram
-    NIBR::TractogramReader tractogram(inp_tractogram);
+    NIBR::TractogramReader tractogram(inp_tractogram, true);
     int N = tractogram.numberOfStreamlines; // Number of streamlines
 
     // Check number of streamlines in the score file
@@ -83,7 +83,7 @@ void run_toTrack()
 
     // Read all streamlines
     disp(MSG_DETAIL,"Reading input tractogram");
-    std::vector<std::vector<std::vector<float>>> allStreamlines = tractogram.read();
+    NIBR::Tractogram allStreamlines = tractogram.getTractogram();
 
     // Prepare tractogram field vector
     std::vector<TractogramField> fields;

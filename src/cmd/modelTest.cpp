@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include "dMRI/tractography/tractogram.h"
 
 
 #ifdef _HAS_MATPLOT_
@@ -120,10 +121,10 @@ void run_modelTest()
     if (!model.isReady()) return;
 
     // Prepare tractogram
-    NIBR::TractogramReader tractogram(inp_path);
+    NIBR::TractogramReader tractogram(inp_path, true);
 
     // Original input streamline
-    std::vector<std::vector<std::vector<float>>>  streamlines = resampleTractogram_withStepCount(&tractogram, model.inpDim);
+    NIBR::Tractogram  streamlines = resampleTractogram_withStepCount(tractogram.getTractogram(), model.inpDim);
 
     disp(MSG_DETAIL,"Resampled streamlines for %d points.", model.inpDim);
 
@@ -131,7 +132,7 @@ void run_modelTest()
     std::vector<std::vector<double>>              enc_streamlines;
 
     // Decoded streamlines from the latent space representations
-    std::vector<std::vector<std::vector<float>>>  dec_streamlines;
+    NIBR::Tractogram  dec_streamlines;
 
     auto run_test_with_type = [&](auto type_placeholder) {
         using T = decltype(type_placeholder);

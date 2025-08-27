@@ -12,7 +12,12 @@ model=../../models/lin10_40_scripted_nonorm.pt
 # model=../../models/lin10_float64_20_scripted_nonorm.pt
 # model=../../models/lin10_float64_15_12_scripted_nonorm.pt
 
-${anomap} modelTest \
+${anomap} score -c \
+${inp} \
+${model} 256 16 float
+
+
+${anomap} modelTest -c \
 ${inp} \
 ${model} 256 16 float
 

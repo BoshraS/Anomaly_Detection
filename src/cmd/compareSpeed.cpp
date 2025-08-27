@@ -81,10 +81,10 @@ void run_compareSpeed()
     if (!model.isReady()) return;
 
      // Prepare tractogram
-    NIBR::TractogramReader tractogram(inp_path);
+    NIBR::TractogramReader tractogram(inp_path, true);
 
     // Original input streamline
-    std::vector<std::vector<std::vector<float>>>  streamlines = resampleTractogram_withStepCount(&tractogram, model.inpDim);
+    NIBR::Tractogram  streamlines = resampleTractogram_withStepCount(tractogram.getTractogram(), model.inpDim);
 
     disp(MSG_DETAIL,"Resampled streamlines for %d points.", model.inpDim);
 
@@ -93,13 +93,13 @@ void run_compareSpeed()
     std::vector<std::vector<double>>              enc_streamlines;
 
     // Decoded streamlines from the latent space representations
-    std::vector<std::vector<std::vector<float>>>  dec_streamlines;
+    NIBR::Tractogram  dec_streamlines;
 
     auto run_test_with_type = [&](auto type_placeholder) {
         using T = decltype(type_placeholder);
         auto lat_streamlines = encodeStreamlines<T>(streamlines,model,batchSize);         // Encode streamlines in latent space
         dec_streamlines      = decodeStreamlines<T>(lat_streamlines, model, batchSize);   // Decode the encoded streamlines
-        enc_streamlines      =  to_double_vector<T>(lat_streamlines);                     // Convert latent space representation to double type for analysis
+        enc_streamlines      = to_double_vector<T>(lat_streamlines);                     // Convert latent space representation to double type for analysis
         // disp(MSG_INFO,"Encoding completed.");
     };
      

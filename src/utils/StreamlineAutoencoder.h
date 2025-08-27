@@ -2,6 +2,7 @@
 #include "nanoflann.hpp"
 #include <Eigen/Dense>
 
+
 class StreamlineAutoencoder {
 
     public:
@@ -42,7 +43,7 @@ constexpr torch::Dtype get_dtype<at::Half>() { return torch::kHalf; }
 // Flattens a streamline and returns it together with its flipped version
 // Output has both the original and flipped streamlines.
 template <typename T>
-std::vector<T> flatten_and_flip_streamlines(const std::vector<std::vector<std::vector<float>>>& streamlines) {
+std::vector<T> flatten_and_flip_streamlines(const NIBR::Tractogram& streamlines) {
     
     if (streamlines.empty()) return {};
 
@@ -74,7 +75,7 @@ std::vector<T> flatten_and_flip_streamlines(const std::vector<std::vector<std::v
 // This helper function encodes a batch of streamlines.
 template <typename T>
 std::vector<std::vector<T>> encode_batch(                               // output latent representations <number of streamlines x latDim>
-    const std::vector<std::vector<std::vector<float>>>& streamlines,    // input tractogram <number of streamlines x (variable) number of points x 3>
+    const NIBR::Tractogram& streamlines,    // input tractogram <number of streamlines x (variable) number of points x 3>
     StreamlineAutoencoder& model                                        // model
 )
 {
@@ -115,7 +116,7 @@ std::vector<std::vector<T>> encode_batch(                               // outpu
 // Encoder
 template <typename T>
 std::vector<std::vector<T>> encodeStreamlines(                              // output latent representations <number of streamlines x latDim>
-    const std::vector<std::vector<std::vector<float>>>& streamlines,        // input tractogram <number of streamlines x (variable) number of points x 3>
+    const NIBR::Tractogram& streamlines,        // input tractogram <number of streamlines x (variable) number of points x 3>
     StreamlineAutoencoder& model,                                           // model
     int batchSize                                                           // batch-size
     )
@@ -144,7 +145,7 @@ std::vector<std::vector<T>> encodeStreamlines(                              // o
         int idx = task.no * batchSize;
 
         // 1. Prepare the sub-vector of streamlines for the current batch
-        std::vector<std::vector<std::vector<float>>> batch_streamlines(streamlines.begin() + idx, streamlines.begin() + idx + bas);
+        NIBR::Tractogram batch_streamlines(streamlines.begin() + idx, streamlines.begin() + idx + bas);
 
         disp(MSG_DETAIL,"Encoding batch between indices %d - %d", idx, idx + bas);
 
@@ -167,7 +168,7 @@ std::vector<std::vector<T>> encodeStreamlines(                              // o
 
 // This helper function decodes a batch of latent vectors.
 template <typename T>
-std::vector<std::vector<std::vector<float>>> decode_batch(              // output tractogram <number of streamlines x (variable) number of points x 3>
+NIBR::Tractogram decode_batch(              // output tractogram <number of streamlines x (variable) number of points x 3>
     const std::vector<std::vector<T>>& latent,                          // input latent representations <number of streamlines x latDim>
     StreamlineAutoencoder& model                                        // model
 )
@@ -189,11 +190,11 @@ std::vector<std::vector<std::vector<float>>> decode_batch(              // outpu
     at::Tensor decoded = model.module.get_method("decode")(inputs).toTensor().to(torch::kCPU).contiguous();
 
     // 3. Unpack the output tensor into the final C++ streamline format
-    std::vector<std::vector<std::vector<float>>> streamlines(N);
+    NIBR::Tractogram streamlines(N);
     AT_DISPATCH_FLOATING_TYPES(decoded.scalar_type(), "decode_batch_dispatcher", [&] {
         for (int i = 0; i < N; ++i) {
             auto decoded_data = decoded[i].data_ptr<scalar_t>();
-            std::vector<std::vector<float>> trk(model.inpDim, std::vector<float>(3));
+            NIBR::Streamline trk(model.inpDim);
             for (int j = 0; j < model.inpDim; ++j) {
                 trk[j][0] = static_cast<float>(decoded_data[j]);
                 trk[j][1] = static_cast<float>(decoded_data[j + model.inpDim]);
@@ -208,7 +209,7 @@ std::vector<std::vector<std::vector<float>>> decode_batch(              // outpu
 
 // Decoder
 template <typename T>
-std::vector<std::vector<std::vector<float>>> decodeStreamlines(             // output tractogram <number of streamlines x (fixed) inpDim x 3>
+NIBR::Tractogram decodeStreamlines(             // output tractogram <number of streamlines x (fixed) inpDim x 3>
     const std::vector<std::vector<T>>& latent,                              // input latent representations <number of streamlines x latDim>
     StreamlineAutoencoder& model,                                           // model
     int batchSize                                                           // batch-size
@@ -226,7 +227,7 @@ std::vector<std::vector<std::vector<float>>> decodeStreamlines(             // o
     int batchCnt = (N < batchSize) ? 1 : (N + batchSize - 1) / batchSize;
     
     // 1. Pre-allocate the entire output vector to allow for parallel writes.
-    std::vector<std::vector<std::vector<float>>> streamlines(N);
+    NIBR::Tractogram streamlines(N);
 
     // 2. Define the lambda for parallel execution.
     auto run = [&](NIBR::MT::TASK task) -> void {
@@ -237,7 +238,7 @@ std::vector<std::vector<std::vector<float>>> decodeStreamlines(             // o
         std::vector<std::vector<T>> latent_batch(latent.begin() + idx, latent.begin() + idx + bas);
 
         // Call the helper to decode this single batch.
-        std::vector<std::vector<std::vector<float>>> decoded_batch = decode_batch<T>(latent_batch, model);
+        NIBR::Tractogram decoded_batch = decode_batch<T>(latent_batch, model);
 
         // Copy the batch results into the correct slice of the pre-allocated output vector.
         for (int i = 0; i < bas; ++i) {

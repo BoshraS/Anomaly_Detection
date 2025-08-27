@@ -1,4 +1,5 @@
 #include "cmd/cmd.h"
+#include "dMRI/tractography/algorithms/ptt/algorithm_ptt.h"
 #include "utils.h"
 
 using namespace NIBR;
@@ -7,17 +8,9 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
 {
     if (existsFile(out) && !force) return true;
 
-    // Prepare input
-    NIBR::TractogramReader _tractogram;
-    if (!_tractogram.initReader(inp)) {
-        disp(MSG_ERROR, "Can't read %s", inp.c_str());
-        return false;
-    }
-
-    auto tractogram_copies = std::make_unique<NIBR::TractogramReader[]>(MT::MAXNUMBEROFTHREADS());
-    for (int t = 0; t < MT::MAXNUMBEROFTHREADS(); t++) {
-        tractogram_copies[t].copyFrom(_tractogram);
-    }
+    // Create tractogram reader and preload it
+    NIBR::TractogramReader _tractogram(inp, true);
+    
 
     // Template that deduces the type T (float, double, at::Half) from its argument.
     auto process_with_type = [&](auto type_placeholder) -> bool {
@@ -38,10 +31,10 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
 
         auto run = [&](NIBR::MT::TASK task) -> void {
             int bas = std::min(batchSize, N - (int)task.no * batchSize);
-            std::vector<std::vector<std::vector<float>>> streamlines(bas);
+            NIBR::Tractogram streamlines(bas);
             for (int i = 0; i < bas; i++) {
                 int idx = i + (int)task.no * batchSize;
-                auto tmp = tractogram_copies[task.threadId].readStreamlineVector(idx);
+                auto tmp = _tractogram.getStreamline(idx);
                 streamlines[i] = resampleStreamline_withStepCount(tmp, model.inpDim);
             }
             results[task.no] = encode_batch<T>(streamlines, model);
