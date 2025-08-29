@@ -119,12 +119,16 @@ void run_modelTest()
     // Set model
     StreamlineAutoencoder model = StreamlineAutoencoder(inp_model_spec, useCPU);
     if (!model.isReady()) return;
+    
+    // Prepare tractogram reader
+    NIBR::TractogramReader tractogram(inp_path, false);
 
-    // Prepare tractogram
-    NIBR::TractogramReader tractogram(inp_path, true);
+
+    auto tracObj = tractogram.getTractogram();
 
     // Original input streamline
-    NIBR::Tractogram  streamlines = resampleTractogram_withStepCount(tractogram.getTractogram(), model.inpDim);
+    auto streamlines = NIBR::resampleTractogram_withStepCount(tracObj, model.inpDim);
+
 
     disp(MSG_DETAIL,"Resampled streamlines for %d points.", model.inpDim);
 

@@ -33,7 +33,9 @@ find_package(Matplot++)
 # Set executable
 set(CMDNAME anomap)
 add_executable(${CMDNAME} ${CMAKE_SOURCE_DIR}/src/main.cpp ${SRCS})
-target_link_libraries(${CMDNAME} Nibrary geogram z dcm2niix++ ${TORCH_LIBRARIES})
+
+# make sure z is after dcm2niix
+target_link_libraries(${CMDNAME} Nibrary geogram dcm2niix++ z ${TORCH_LIBRARIES} )
 if(Matplot++_FOUND)
    target_link_libraries(${CMDNAME} Matplot++::matplot)
    add_definitions(-D_HAS_MATPLOT_) 

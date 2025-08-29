@@ -63,8 +63,6 @@ void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, in
         return;
     }
 
-    std::cout << "file path: " << moduleFile << std::endl;
-
     try {
         disp(MSG_DETAIL,"Loading model %s", moduleFile.c_str());
         module = torch::jit::load(moduleFile);

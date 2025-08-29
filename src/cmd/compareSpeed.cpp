@@ -81,7 +81,7 @@ void run_compareSpeed()
     if (!model.isReady()) return;
 
      // Prepare tractogram
-    NIBR::TractogramReader tractogram(inp_path, true);
+    NIBR::TractogramReader tractogram(inp_path, false);
 
     // Original input streamline
     NIBR::Tractogram  streamlines = resampleTractogram_withStepCount(tractogram.getTractogram(), model.inpDim);
@@ -147,7 +147,7 @@ void run_compareSpeed()
 
     auto hausdorfStartTime = std::chrono::high_resolution_clock::now();
 
-    //NIBR::MT::MTRUN(streamlines.size(), "Computing hausdorf", getDistances_hausdorf);
+    NIBR::MT::MTRUN(streamlines.size(), "Computing hausdorf", getDistances_hausdorf);
 
     auto hausdorfEndTime = std::chrono::high_resolution_clock::now();
 
