@@ -6,17 +6,15 @@ buildShared=OFF
 buildDir=build
 
 Torch_DIR="/opt/libtorch/share/cmake/Torch"
-#inc_path="../nibrary/build-static/install/include/nibrary_v0.1"
-#lib_path="../nibrary/build-static/install/lib/nibrary_v0.1"
 
-inc_path="./nibrary/build-static/install/include/nibrary_v0.1.0"
-lib_path="./nibrary/build-static/install/lib/nibrary_v0.1.0"
+inc_path="./nibrary/build-static/install/include/nibrary_v0.4.1"
+lib_path="./nibrary/build-static/install/lib/nibrary_v0.4.1"
 
 c_compiler=/bin/gcc-12
 cxx_compiler=/bin/g++-12
 
 
-# rm -rf ${buildDir}
+rm -rf ${buildDir}
 mkdir -p ${buildDir}
 cd ${buildDir}
 
@@ -28,6 +26,7 @@ ${cmakeExe} \
 -DCMAKE_INCLUDE_PATH=${inc_path} \
 -DCMAKE_LIBRARY_PATH=${lib_path} \
 -DBUILD_SHARED_LIBS=${buildShared} \
+-DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
 ..
 
 ${cmakeExe} --build . --config ${buildType} --target install --parallel 16
