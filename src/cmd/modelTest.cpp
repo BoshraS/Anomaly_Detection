@@ -1,5 +1,7 @@
 #include "cmd.h"
 #include "dMRI/tractography/tractogram.h"
+#include "dMRI/tractography/utility/streamline_operators.h"
+#include <chrono>
 
 
 #ifdef _HAS_MATPLOT_
@@ -50,6 +52,36 @@ double correlation_coefficient(const std::vector<double>& x, const std::vector<d
     if (stddev_X == 0 || stddev_Y == 0) return 0; // Avoid division by zero
     
     return covariance / (stddev_X * stddev_Y);
+}
+
+double latentDistanceCalculator(const std::vector<double>& a, const std::vector<double>& b, int latDim) {
+    double sum = 0.0;
+    for (int i = 0; i < latDim; ++i) {
+        double diff = a[i] - b[i];
+        sum += diff * diff;
+    }
+    return std::sqrt(sum);
+}
+
+double latentMinDistanceCalculator(const std::vector<double>& a, const std::vector<double>& b, int latDim) {
+    double sum1 = 0.0;
+    double sum2 = 0.0;
+    double sum3 = 0.0;
+    double sum4 = 0.0;
+    for (int i = 0; i < latDim; ++i) {
+        double diff1 = a[i] - b[i];
+        sum1 += diff1 * diff1;
+
+        double diff2 = a[i] - b[latDim+i];
+        sum2 += diff2 * diff2;
+
+        double diff3 = a[latDim+i] - b[i];
+        sum3 += diff3 * diff3;
+
+        double diff4 = a[latDim+i] - b[latDim+i];
+        sum4 += diff4 * diff4;
+    }
+    return std::sqrt(std::min({sum1, sum2, sum3, sum4}));
 }
 
 
@@ -188,6 +220,30 @@ void run_modelTest()
     };
 
 
+    // Calculate execution time of one pair of streamlines with mdf and haussdorff
+
+    auto mdfStartTime = std::chrono::high_resolution_clock::now();
+
+    getMDFDistance(streamlines[0], streamlines[1]);
+
+    auto mdfEndTime = std::chrono::high_resolution_clock::now();
+
+    auto mdfDuration = std::chrono::duration_cast<std::chrono::microseconds>(mdfEndTime - mdfStartTime);
+
+    std::cout << "mdf execution time: " << mdfDuration.count() << " microseconds" << std::endl;
+
+    auto hausdorffStartTime = std::chrono::high_resolution_clock::now();
+
+    getHausdorffDistance(streamlines[0], streamlines[1]);
+
+    auto hausdorffEndTime = std::chrono::high_resolution_clock::now();
+
+    auto hausdorffduration = std::chrono::duration_cast<std::chrono::microseconds>(hausdorffEndTime - hausdorffStartTime);
+
+    std::cout << "hausdorff execution time: " << hausdorffduration.count() << " microseconds" << std::endl;
+
+    
+
     // Compute pair-wise distances
     std::vector<std::vector<double>> enc_dist1        (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
     std::vector<std::vector<double>> enc_dist2        (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
@@ -221,6 +277,70 @@ void run_modelTest()
     plotDistancesSideBySide(hau, mdf, enc1, enc2, edh, edm);
     std::this_thread::sleep_for(std::chrono::seconds(5));
     #endif
+
+    double latentScalingFactorMdf = (vectorToEigen(mdf).array() / vectorToEigen(enc1).array()).mean();
+
+    std::vector<std::vector<double>> lat_dist       (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
+    std::vector<std::vector<double>> lat_min_dist   (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
+
+    auto calcLatDistancesSimple = [&](NIBR::MT::TASK task) -> void {
+        for(size_t i = 0; i < task.no; ++i) {
+            lat_dist[task.no][i] = latentScalingFactorMdf * latentDistanceCalculator(enc_streamlines[task.no], enc_streamlines[i], model.latDim);
+        }
+    };
+
+    NIBR::MT::MTRUN(enc_streamlines.size(), "Computing Lat simple distances", calcLatDistancesSimple);
+
+    auto calcLatDistancesMin = [&](NIBR::MT::TASK task) -> void {
+        for(size_t i = 0; i < task.no; ++i) {
+            lat_min_dist[task.no][i] = latentScalingFactorMdf * latentMinDistanceCalculator(enc_streamlines[task.no], enc_streamlines[i], model.latDim);
+        }
+    };
+
+    NIBR::MT::MTRUN(enc_streamlines.size(), "Computing Lat min distances", calcLatDistancesMin);
+
+    auto lat1 = flattenAndRemoveNAN(lat_dist);
+    auto lat2 = flattenAndRemoveNAN(lat_min_dist);
+
+
+
+    double sum_mdf = std::accumulate(mdf.begin(), mdf.end(), 0.0);
+    double mean_mdf = sum_mdf / mdf.size();
+
+    std::vector<double> sorted_mdf = mdf;
+    std::sort(sorted_mdf.begin(), sorted_mdf.end());
+    double median_mdf = (sorted_mdf[sorted_mdf.size()/2 - 1] + sorted_mdf[sorted_mdf.size()/2]) / 2.0;
+
+    double min_mdf = sorted_mdf[0];
+    double max_mdf = sorted_mdf[sorted_mdf.size()-1];
+
+    
+
+    double sum_hau = std::accumulate(hau.begin(), hau.end(), 0.0);
+    double mean_hau = sum_hau / hau.size();
+
+    std::vector<double> sorted_hau = hau;
+    std::sort(sorted_hau.begin(), sorted_hau.end());
+    double median_hau = (sorted_hau[sorted_hau.size()/2 - 1] + sorted_hau[sorted_hau.size()/2]) / 2.0;
+
+    double min_hau = sorted_hau[0];
+    double max_hau = sorted_hau[sorted_hau.size()-1];
+
+
+    
+
+
+    disp(MSG_INFO,"");
+    disp(MSG_INFO,"MDF Minimum distance between streamlines: %.6f", min_mdf);
+    disp(MSG_INFO,"MDF Maximum distance between streamlines: %.6f", max_mdf);
+    disp(MSG_INFO,"MDF Average distance between streamlines: %.6f", mean_mdf);
+    disp(MSG_INFO,"MDF Median distance between streamlines: %.6f", median_mdf);
+
+    disp(MSG_INFO,"");
+    disp(MSG_INFO,"Haussdorff Minimum distance between streamlines: %.6f", min_hau);
+    disp(MSG_INFO,"Haussdorff Maximum distance between streamlines: %.6f", max_hau);
+    disp(MSG_INFO,"Haussdorff Average distance between streamlines: %.6f", mean_hau);
+    disp(MSG_INFO,"Haussdorff Median distance between streamlines: %.6f", median_hau);
    
     
     

@@ -232,6 +232,8 @@ void run_findClusterCenters()
     // Adjust maxDist based on model's distance scaling factor
     float adjMaxDist = (maxDist/model.distScaler) * (maxDist/model.distScaler);
 
+    //float adjMaxDist = maxDist when in euclidean space
+
     disp(MSG_INFO,"Clustering...");
     int totRead = 0;
     for (int iter = 0; iter < maxIteration; iter++) {
@@ -330,8 +332,6 @@ void run_findClusterCenters()
             }
 
             {
-                // the mutex doesnt exist in newer nibrary versions so creating a new mutex
-                //NIBR::MT::PROC_MX().lock();
                 mx.lock();
 
                 for (size_t ind = 0; ind < unassignedClusterCenters.size(); ind++) {
