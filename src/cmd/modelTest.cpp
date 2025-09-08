@@ -331,14 +331,14 @@ void run_modelTest()
 
 
     auto latentSimpleStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_ls = 0.95 * latentDistanceCalculator(enc_streamlines[0], enc_streamlines[1], model.latDim);
+    double temp_result_ls = 0.067612 * latentDistanceCalculator(enc_streamlines[0], enc_streamlines[1], model.latDim);
     auto latentSimpleEndTime = std::chrono::high_resolution_clock::now();
     auto latentSimpleduration = std::chrono::duration_cast<std::chrono::microseconds>(latentSimpleEndTime - latentSimpleStartTime);
     std::cout << "latent simple execution time: " << latentSimpleduration.count() << " microseconds | result: " << temp_result_ls << std::endl;
 
 
     auto latentMinStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_lm = 0.95 * latentMinDistanceCalculator(enc_streamlines[0], enc_streamlines[1], model.latDim);
+    double temp_result_lm = 0.067612 * latentMinDistanceCalculator(enc_streamlines[0], enc_streamlines[1], model.latDim);
     auto latentMinEndTime = std::chrono::high_resolution_clock::now();
     auto latentMinduration = std::chrono::duration_cast<std::chrono::microseconds>(latentMinEndTime - latentMinStartTime);
     std::cout << "latent simple execution time: " << latentMinduration.count() << " microseconds | result: " << temp_result_lm << std::endl;
@@ -397,7 +397,7 @@ void run_modelTest()
     NIBR::MT::MTRUN(streamlines.size(), "Computing hau distance", getHauDist);
     auto hau = flattenAndRemoveNANAndFree(hau_dist);
     writeVectorToDisk(hau, "hau.bin");
-    hau_dist.clear(); hau_dist.shrink_to_fit();
+    hau.clear(); hau.shrink_to_fit();
     MMapVector hau_mmap = mmapVectorOpen("hau.bin");
 
 
@@ -412,7 +412,7 @@ void run_modelTest()
     NIBR::MT::MTRUN(streamlines.size(), "Computing mdf distance", getMDFDist);
     auto mdf = flattenAndRemoveNANAndFree(mdf_dist);
     writeVectorToDisk(mdf, "mdf.bin");
-    mdf_dist.clear(); mdf_dist.shrink_to_fit();
+    mdf.clear(); mdf.shrink_to_fit();
     MMapVector mdf_mmap = mmapVectorOpen("mdf.bin");
 
 
