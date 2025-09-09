@@ -5,6 +5,7 @@
 #include "utils/utils.h"
 
 void modelTest(CLI::App* app);
+void modelTest_precalc(CLI::App* app);
 void encode(CLI::App* app);
 void decode(CLI::App* app);
 void findClusterCenters(CLI::App* app);

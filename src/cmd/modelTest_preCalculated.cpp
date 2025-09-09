@@ -18,7 +18,7 @@
 
 using namespace NIBR;
 
-namespace CMDARGS_MODELTEST {
+namespace CMDARGS_MODELTEST_PRECALC {
     std::string  inp_path;
     
     std::tuple<std::string, int, int, std::string> inp_model_spec("", 0, 0, ""); // module_path, inp_dim, lat_dim, data type
@@ -29,12 +29,20 @@ namespace CMDARGS_MODELTEST {
     int numberOfThreads     =  0;
     std::string verbose     = "info";
     bool force              = false;
+
+    std::string enc1_path    = "";
+    std::string enc2_path    = "";
+    std::string hau_path    = "";
+    std::string mdf_path    = "";
+    std::string lat1_path    = "";
+    std::string lat2_path    = "";
+
 }
 
-using namespace CMDARGS_MODELTEST; 
-
+using namespace CMDARGS_MODELTEST_PRECALC; 
 
 #include "utils/modelTestHelpers.h"
+
 /*
 struct MMapVector {
     int fd = -1;
@@ -211,6 +219,7 @@ inline const double& mmapVectorAt(const MMapVector& mv, size_t i) {
     return mv.data[i];
 }
 */
+
 #ifdef _HAS_MATPLOT_
 void plotScatter(const std::vector<double>& x, const std::vector<double>& y, const std::string& xlabel, const std::string& ylabel, const std::string& title) {
     using namespace matplot;
@@ -234,7 +243,7 @@ void plotDistancesSideBySide(const std::vector<double>& hau, const std::vector<d
 }
 #endif
  
-void run_modelTest()
+void run_modelTest_precalc()
 { 
 
     parseCommon(numberOfThreads,verbose);
@@ -285,37 +294,6 @@ void run_modelTest()
     // return;
 
     // Define one-sided and two-sided distance functions in the latent space
-    auto getOneSidedEncodedDistance = [&](size_t idx1, size_t idx2) -> double {
-        double sum1 = 0;
-        double sum2 = 0;
-        for (int i = 0; i < model.latDim; i++) {
-            double d1 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][i]);
-            double d2 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][i+model.latDim]);
-            sum1   += d1 * d1;
-            sum2   += d2 * d2;
-        }
-
-        return std::min(std::sqrt(sum2), std::sqrt(sum1));
-    };
-
-    auto getTwoSidedEncodedDistance = [&](size_t idx1, size_t idx2) -> double {
-        double sum1 = 0;
-        double sum2 = 0;
-        double sum3 = 0;
-        double sum4 = 0;
-        for (int i = 0; i < model.latDim; i++) {
-            double d1 = (enc_streamlines[idx1][i]              - enc_streamlines[idx2][i]);
-            double d2 = (enc_streamlines[idx1][i]              - enc_streamlines[idx2][i+model.latDim]);
-            double d3 = (enc_streamlines[idx1][i+model.latDim] - enc_streamlines[idx2][i]);
-            double d4 = (enc_streamlines[idx1][i+model.latDim] - enc_streamlines[idx2][i+model.latDim]);
-            sum1     += d1 * d1;
-            sum2     += d2 * d2;
-            sum3     += d3 * d3;
-            sum4     += d4 * d4;
-        }
-
-        return std::min(std::sqrt(sum4), std::min(std::sqrt(sum3), std::min(std::sqrt(sum2), std::sqrt(sum1))));
-    };
 
 
     // Calculate execution times
@@ -360,63 +338,12 @@ void run_modelTest()
 
     disp(MSG_INFO,"Starting getDistances");
 
-    std::vector<std::vector<double>> enc_dist1        (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
     auto getEnc1 = [&](NIBR::MT::TASK task) -> void {
-        for (size_t i = 0; i < task.no; i++) {
-            enc_dist1[task.no][i]           = getOneSidedEncodedDistance(task.no,i);
-        }
+        
         enc_dec_hau_dist[task.no] = getHausdorffDistance(streamlines[task.no], dec_streamlines[task.no]);
         enc_dec_mdf_dist[task.no] = getMDFDistance(streamlines[task.no], dec_streamlines[task.no]);
     };
-    NIBR::MT::MTRUN(streamlines.size(), "Computing enc 1 distance", getEnc1);
-    auto enc1 = flattenAndRemoveNANAndFree(enc_dist1);
-    writeVectorToDisk(enc1, "enc1.bin");
-    enc1.clear(); enc1.shrink_to_fit();
-    MMapVector enc1_mmap = mmapVectorOpen("enc1.bin");
-
-
-    std::vector<std::vector<double>> enc_dist2        (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
-    auto getEnc2 = [&](NIBR::MT::TASK task) -> void {
-        for (size_t i = 0; i < task.no; i++) {
-            enc_dist2[task.no][i]           = getTwoSidedEncodedDistance(task.no,i);
-        }
-    };
-    NIBR::MT::MTRUN(streamlines.size(), "Computing enc 2 distance", getEnc2);
-    auto enc2 = flattenAndRemoveNANAndFree(enc_dist2);
-    writeVectorToDisk(enc2, "enc2.bin");
-    enc2.clear(); enc2.shrink_to_fit();
-    MMapVector enc2_mmap = mmapVectorOpen("enc2.bin");
-
-
-
-
-    std::vector<std::vector<double>> hau_dist         (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
-
-    auto getHauDist= [&](NIBR::MT::TASK task) -> void {
-        for (size_t i = 0; i < task.no; i++) {
-            hau_dist[task.no][i]            = getHausdorffDistance(streamlines[task.no], streamlines[i]);
-        }
-    };
-    NIBR::MT::MTRUN(streamlines.size(), "Computing hau distance", getHauDist);
-    auto hau = flattenAndRemoveNANAndFree(hau_dist);
-    writeVectorToDisk(hau, "hau.bin");
-    hau.clear(); hau.shrink_to_fit();
-    MMapVector hau_mmap = mmapVectorOpen("hau.bin");
-
-
-
-
-    std::vector<std::vector<double>> mdf_dist         (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
-    auto getMDFDist= [&](NIBR::MT::TASK task) -> void {
-        for (size_t i = 0; i < task.no; i++) {
-            mdf_dist[task.no][i]            = getMDFDistance(streamlines[task.no], streamlines[i]);
-        }
-    };
-    NIBR::MT::MTRUN(streamlines.size(), "Computing mdf distance", getMDFDist);
-    auto mdf = flattenAndRemoveNANAndFree(mdf_dist);
-    writeVectorToDisk(mdf, "mdf.bin");
-    mdf.clear(); mdf.shrink_to_fit();
-    MMapVector mdf_mmap = mmapVectorOpen("mdf.bin");
+    NIBR::MT::MTRUN(streamlines.size(), "Computing enc-dec distances", getEnc1);
 
 
     auto edh  = enc_dec_hau_dist;
@@ -427,57 +354,63 @@ void run_modelTest()
     std::this_thread::sleep_for(std::chrono::seconds(5));
     #endif
 
-    double latentScalingFactorMdf = (vectorToEigen(mdf_mmap).array() / vectorToEigen(enc1_mmap).array()).mean();
+    MMapVector enc1_mmap;
+    MMapVector enc2_mmap;
+    MMapVector hau_mmap;
+    MMapVector mdf_mmap;
+    MMapVector lat1_mmap;
+    MMapVector lat2_mmap;
+    // mmap files which were given
+    if(enc1_path != "")
+    {
+        enc1_mmap = mmapVectorOpen(enc1_path);
+    }
+    if(enc2_path != "")
+    {
+        enc2_mmap = mmapVectorOpen(enc2_path);
+    }
+    if(hau_path != "")
+    {
+        hau_mmap = mmapVectorOpen(hau_path);
+    }
+    if(mdf_path != "")
+    {
+        mdf_mmap = mmapVectorOpen(mdf_path);
+    }
+    if(lat1_path != "")
+    {
+        lat1_mmap = mmapVectorOpen(lat1_path);
+    }
+    if(lat2_path != "")
+    {
+        lat2_mmap = mmapVectorOpen(lat2_path);
+    }
 
-    disp(MSG_INFO,"Starting lat distance calculations");
-
-    std::vector<std::vector<double>> lat_dist       (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
+    double mean_mdf = -1.0;
+    double min_mdf = -1.0;
+    double max_mdf = -1.0;
+    if (mdf_path != "") {
+        double sum_mdf = std::accumulate(mdf_mmap.data, mdf_mmap.data + mdf_mmap.size, 0.0);
+        mean_mdf = sum_mdf / mdf_mmap.size;
+        auto [min_it_mdf, max_it_mdf] = std::minmax_element(mdf_mmap.data, mdf_mmap.data + mdf_mmap.size);
+        min_mdf = *min_it_mdf;
+        max_mdf = *max_it_mdf;
+    }
     
 
-    auto calcLatDistancesSimple = [&](NIBR::MT::TASK task) -> void {
-        for(size_t i = 0; i < task.no; ++i) {
-            lat_dist[task.no][i] = latentScalingFactorMdf * latentDistanceCalculator(enc_streamlines[task.no], enc_streamlines[i], model.latDim);
-        }
-    };
-
-    NIBR::MT::MTRUN(enc_streamlines.size(), "Computing Lat simple distances", calcLatDistancesSimple);
-    auto lat1 = flattenAndRemoveNANAndFree(lat_dist);
-    writeVectorToDisk(lat1, "lat1.bin");
-    lat1.clear(); lat1.shrink_to_fit();
-    MMapVector lat1_mmap = mmapVectorOpen("lat1.bin");
-
-
-
-
-    std::vector<std::vector<double>> lat_min_dist   (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
-
-    auto calcLatDistancesMin = [&](NIBR::MT::TASK task) -> void {
-        for(size_t i = 0; i < task.no; ++i) {
-            lat_min_dist[task.no][i] = latentScalingFactorMdf * latentMinDistanceCalculator(enc_streamlines[task.no], enc_streamlines[i], model.latDim);
-        }
-    };
-
-    NIBR::MT::MTRUN(enc_streamlines.size(), "Computing Lat min distances", calcLatDistancesMin);
-    auto lat2 = flattenAndRemoveNANAndFree(lat_min_dist);
-    writeVectorToDisk(lat2, "lat2.bin");
-    lat2.clear(); lat2.shrink_to_fit();
-    MMapVector lat2_mmap = mmapVectorOpen("lat2.bin");
-
-
-
-    double sum_mdf = std::accumulate(mdf_mmap.data, mdf_mmap.data + mdf_mmap.size, 0.0);
-    double mean_mdf = sum_mdf / mdf_mmap.size;
-    auto [min_it_mdf, max_it_mdf] = std::minmax_element(mdf_mmap.data, mdf_mmap.data + mdf_mmap.size);
-    double min_mdf = *min_it_mdf;
-    double max_mdf = *max_it_mdf;
-
     
 
-    double sum_hau = std::accumulate(hau_mmap.data, hau_mmap.data + hau_mmap.size, 0.0);
-    double mean_hau = sum_hau / hau_mmap.size;
-    auto [min_it_hau, max_it_hau] = std::minmax_element(hau_mmap.data, hau_mmap.data + hau_mmap.size);
-    double min_hau = *min_it_hau;
-    double max_hau = *max_it_hau;
+    
+    double mean_hau = -1.0;
+    double min_hau = -1.0;
+    double max_hau = -1.0;
+    if(hau_path != "") {
+        double sum_hau = std::accumulate(hau_mmap.data, hau_mmap.data + hau_mmap.size, 0.0);
+        mean_hau = sum_hau / hau_mmap.size;
+        auto [min_it_hau, max_it_hau] = std::minmax_element(hau_mmap.data, hau_mmap.data + hau_mmap.size);
+        min_hau = *min_it_hau;
+        max_hau = *max_it_hau;
+    }
 
 
     
@@ -496,23 +429,34 @@ void run_modelTest()
     //disp(MSG_INFO,"Haussdorff Median distance between streamlines: %.6f", median_hau);
    
     
-    
-    disp(MSG_INFO,"");
-    disp(MSG_INFO,"Pearson correlation coefficients:");
-    disp(MSG_INFO,"Hausdorff and (one-sided) Euc. distance in latent space: %.6f", correlation_coefficient(hau_mmap,enc1_mmap ));
-    disp(MSG_INFO,"MDF and (one-sided) Euc. distance in latent space:       %.6f", correlation_coefficient(mdf_mmap,enc1_mmap ));
-    disp(MSG_INFO,"Hausdorff and MDF:                                       %.6f", correlation_coefficient(hau_mmap,mdf_mmap  ));
-    disp(MSG_INFO,"One-sided and two-sided Euc. distance in latent space:   %.6f", correlation_coefficient(enc1_mmap,enc2_mmap));
+    if(hau_path != "" && mdf_path != "" && enc1_path != "" && enc2_path != ""){
+        disp(MSG_INFO,"");
+        disp(MSG_INFO,"Pearson correlation coefficients:");
+        disp(MSG_INFO,"Hausdorff and (one-sided) Euc. distance in latent space: %.6f", correlation_coefficient(hau_mmap,enc1_mmap ));
+        disp(MSG_INFO,"MDF and (one-sided) Euc. distance in latent space:       %.6f", correlation_coefficient(mdf_mmap,enc1_mmap ));
+        disp(MSG_INFO,"Hausdorff and MDF:                                       %.6f", correlation_coefficient(hau_mmap,mdf_mmap  ));
+        disp(MSG_INFO,"One-sided and two-sided Euc. distance in latent space:   %.6f", correlation_coefficient(enc1_mmap,enc2_mmap));
 
+    } else {
+        disp(MSG_INFO, "");
+        disp(MSG_INFO, "Skipped correlation coefficient. Requires hausdorff, mdf, enc1 and enc2");
+    }
+    
     disp(MSG_INFO,"");
     disp(MSG_INFO,"Auto-encoder error");
     disp(MSG_INFO,"Mean Hausdorff distance between input and reconstructed: %.6f mm", vectorToEigen(edh).mean());
     disp(MSG_INFO,"Mean MDF distance between input and reconstructed:       %.6f mm", vectorToEigen(edm).mean());
 
-    disp(MSG_INFO,"");
-    disp(MSG_INFO,"Distance scaling factor to match Hausdorff distance:     %.6f", (vectorToEigen(hau_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
-    disp(MSG_INFO,"Distance scaling factor to match MDF distance:           %.6f", (vectorToEigen(mdf_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
+    if(hau_path != "" && mdf_path != ""){
+        disp(MSG_INFO,"");
+        disp(MSG_INFO,"Distance scaling factor to match Hausdorff distance:     %.6f", (vectorToEigen(hau_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
+        disp(MSG_INFO,"Distance scaling factor to match MDF distance:           %.6f", (vectorToEigen(mdf_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
 
+    } else {
+        disp(MSG_INFO,"");
+        disp(MSG_INFO,"Sjipped scaling factor. Requires hausdorff and mdf");
+    }
+    
     disp(MSG_INFO,"");
     
 
@@ -521,24 +465,49 @@ void run_modelTest()
     #endif
 
 
-    mmapVectorClose(mdf_mmap);
-    mmapVectorClose(hau_mmap);
-    mmapVectorClose(enc1_mmap);
-    mmapVectorClose(enc2_mmap);
-    mmapVectorClose(lat1_mmap);
-    mmapVectorClose(lat2_mmap);
+    
+    
+    
+    
+    
+    
+
+    if(enc1_path != "")
+    {
+        mmapVectorClose(enc1_mmap);
+    }
+    if(enc2_path != "")
+    {
+        mmapVectorClose(enc2_mmap);
+    }
+    if(hau_path != "")
+    {
+        mmapVectorClose(hau_mmap);
+    }
+    if(mdf_path != "")
+    {
+        mmapVectorClose(mdf_mmap);
+    }
+    if(lat1_path != "")
+    {
+        mmapVectorClose(lat1_mmap);
+    }
+    if(lat2_path != "")
+    {
+        mmapVectorClose(lat2_mmap);
+    }
 
     return;
        
 }          
     
      
-void modelTest(CLI::App* app)   
+void modelTest_precalc(CLI::App* app)   
 { 
 
     app->formatter(std::make_shared<CustomHelpFormatter>());
 
-    const std::string info = "Testing a model involves encoding each streamline in a tractogram and comparing the pair-wise distance in latent space agains the distance computed using two-sided Hausdorff and minimum average direct-flip (MDF) distances.";
+    const std::string info = "Testing a model involves encoding each streamline in a tractogram and comparing the pair-wise distance in latent space agains the distance computed using two-sided Hausdorff and minimum average direct-flip (MDF) distances. This version doesn't compute the distances but instead reads them from files.";
 
     app->description("tests how well a model encodes a tractogram");
 
@@ -548,13 +517,25 @@ void modelTest(CLI::App* app)
     app->add_option("<model>",               inp_model_spec,     "Input model, specified with the path to the Torch script file, followed by the input dimensions, latent space dimensions, data type (float or double), and distance scaling factor of the model. E.g. /model/test_model.pt 256 64 float 0.08. ")
         ->required();
 
+    app->add_option("--enc1", enc1_path, "Path to a enc1.bin");
+
+    app->add_option("--enc2", enc2_path, "Path to a enc2.bin");
+
+    app->add_option("--hau", hau_path, "Path to a hau.bin");
+
+    app->add_option("--mdf", mdf_path, "Path to a mdf.bin");
+
+    app->add_option("--lat1", lat1_path, "Path to a lat1.bin");
+
+    app->add_option("--lat2", lat2_path, "Path to a lat2.bin");
+
     app->add_flag("--useCPU, -c",            useCPU,             "Use only CPU without checking any available GPUs.");
 
     app->add_option("--numberOfThreads, -n", numberOfThreads,    "Number of threads.");
     app->add_option("--verbose, -v",         verbose,            "Verbose level. Options are \"quite\",\"fatal\",\"error\",\"warn\",\"info\" and \"debug\". Default=info");
     app->add_flag("--force, -f",             force,              "Force overwriting of existing file");
 
-    app->callback(run_modelTest);  
+    app->callback(run_modelTest_precalc);  
      
 }
 
