@@ -24,6 +24,7 @@ int main(int argc, char *argv[]) {
     toImg(app.add_subcommand("toImg", ""));
     modelTest(app.add_subcommand("modelTest", ""));
     modelTest_precalc(app.add_subcommand("modelTest_precalc", ""));
+    measureDistance(app.add_subcommand("measureDistance", ""));
     compareSpeed(app.add_subcommand("compareSpeed", ""));
 
     disp(MSG_DEBUG, "Parsing input");

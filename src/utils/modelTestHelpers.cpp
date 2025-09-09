@@ -74,6 +74,9 @@ double latentMinDistanceCalculator(const std::vector<double>& a, const std::vect
 
 void writeVectorToDisk(const std::vector<double>& data, const std::string& filename) {
     std::ofstream ofs(filename, std::ios::binary | std::ios::out);
+    if (!ofs) {
+        throw std::runtime_error("Failed to open file: " + filename);
+    }
     ofs.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(double));
 }
 

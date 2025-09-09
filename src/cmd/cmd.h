@@ -14,3 +14,4 @@ void toTrack(CLI::App* app);
 void toImg(CLI::App* app);
 
 void compareSpeed(CLI::App* app);
+void measureDistance(CLI::App* app);
