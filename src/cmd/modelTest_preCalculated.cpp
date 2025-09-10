@@ -296,7 +296,7 @@ void run_modelTest_precalc()
     // Define one-sided and two-sided distance functions in the latent space
 
 
-    // Calculate execution times
+    // Calculate execution times one to one
 
     auto mdfStartTime = std::chrono::high_resolution_clock::now();
     double temp_result_mdf = getMDFDistance(streamlines[0], streamlines[1]);
@@ -323,11 +323,33 @@ void run_modelTest_precalc()
     auto latentMinEndTime = std::chrono::high_resolution_clock::now();
     auto latentMinduration = std::chrono::duration_cast<std::chrono::microseconds>(latentMinEndTime - latentMinStartTime);
     std::cout << "latent simple execution time: " << latentMinduration.count() << " microseconds | result: " << temp_result_lm << std::endl;
+
+    // Calculate execution times for one to all
+
+    disp(MSG_INFO,"Calculating execution times for one to all\n");
+
+    std::vector<double> temp_mdf(tracObj.size());
+    auto oneAllMDF= [&](NIBR::MT::TASK task) -> void {
+        temp_mdf[task.no] = getMDFDistance(tracObj[0], tracObj[task.no]);
+
+    };
+    auto mdfOneToAllStartTime = std::chrono::high_resolution_clock::now();
+    NIBR::MT::MTRUN(tracObj.size(), "Computing one for all MDF", oneAllMDF);
+    auto mdfOneToAllEndTime = std::chrono::high_resolution_clock::now();
+    auto mdfOneToAllDuration = std::chrono::duration_cast<std::chrono::microseconds>(mdfOneToAllEndTime - mdfOneToAllStartTime);
+    disp(MSG_INFO,"MDF one to all duration: %.i microseconds\n", mdfOneToAllDuration);
+
+    std::vector<double> temp_hau(tracObj.size());
+    auto oneAllHau= [&](NIBR::MT::TASK task) -> void {
+        temp_hau[task.no] = getHausdorffDistance(tracObj[0], tracObj[task.no]);
+    };
+    auto hauOneToAllStartTime = std::chrono::high_resolution_clock::now();
+    NIBR::MT::MTRUN(tracObj.size(), "Computing one for all Hausdorff", oneAllHau);
+    auto hauOneToAllEndTime = std::chrono::high_resolution_clock::now();
+    auto hauOneToAllDuration = std::chrono::duration_cast<std::chrono::microseconds>(hauOneToAllEndTime - hauOneToAllStartTime);
+    disp(MSG_INFO,"Haussdorf one to all duration: %.i microseconds\n", hauOneToAllDuration);
+
     
-
-    // Compute pair-wise distances
-
-    // this takes an absurd amount of memory with bigger tractograms
     
     
     
