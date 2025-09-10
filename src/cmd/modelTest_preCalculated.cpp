@@ -328,23 +328,27 @@ void run_modelTest_precalc()
 
     disp(MSG_INFO,"Calculating execution times for one to all\n");
 
-    std::vector<double> temp_mdf(tracObj.size());
+    std::vector<std::vector<double>> temp_mdf(1024, std::vector<double>(tracObj.size(),NAN));
     auto oneAllMDF= [&](NIBR::MT::TASK task) -> void {
-        temp_mdf[task.no] = getMDFDistance(tracObj[0], tracObj[task.no]);
+        for (size_t i = 0; i < task.no; i++) {
+            temp_mdf[task.no][i] = getMDFDistance(tracObj[0], tracObj[task.no]);
+        }
 
     };
     auto mdfOneToAllStartTime = std::chrono::high_resolution_clock::now();
-    NIBR::MT::MTRUN(tracObj.size(), "Computing one for all MDF", oneAllMDF);
+    NIBR::MT::MTRUN(1024, "Computing MDF distances for 1024 to all", oneAllMDF); 
     auto mdfOneToAllEndTime = std::chrono::high_resolution_clock::now();
     auto mdfOneToAllDuration = std::chrono::duration_cast<std::chrono::microseconds>(mdfOneToAllEndTime - mdfOneToAllStartTime);
     disp(MSG_INFO,"MDF one to all duration: %.i microseconds\n", mdfOneToAllDuration);
 
-    std::vector<double> temp_hau(tracObj.size());
+    std::vector<std::vector<double>> temp_hau(1024, std::vector<double>(tracObj.size(),NAN));
     auto oneAllHau= [&](NIBR::MT::TASK task) -> void {
-        temp_hau[task.no] = getHausdorffDistance(tracObj[0], tracObj[task.no]);
+        for (size_t i = 0; i < task.no; i++) {
+            temp_hau[task.no][i] = getHausdorffDistance(streamlines[task.no], streamlines[i]);
+        }
     };
     auto hauOneToAllStartTime = std::chrono::high_resolution_clock::now();
-    NIBR::MT::MTRUN(tracObj.size(), "Computing one for all Hausdorff", oneAllHau);
+    NIBR::MT::MTRUN(1024, "Computing Haussdorff distances for 1024 to all", oneAllHau); 
     auto hauOneToAllEndTime = std::chrono::high_resolution_clock::now();
     auto hauOneToAllDuration = std::chrono::duration_cast<std::chrono::microseconds>(hauOneToAllEndTime - hauOneToAllStartTime);
     disp(MSG_INFO,"Haussdorf one to all duration: %.i microseconds\n", hauOneToAllDuration);
