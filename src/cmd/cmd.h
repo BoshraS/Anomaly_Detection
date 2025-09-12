@@ -15,3 +15,4 @@ void toImg(CLI::App* app);
 
 void compareSpeed(CLI::App* app);
 void measureDistance(CLI::App* app);
+void findClusterCenters_euclidean(CLI::App* app);

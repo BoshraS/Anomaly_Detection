@@ -36,182 +36,7 @@ using namespace CMDARGS_MODELTEST;
 
 
 #include "utils/modelTestHelpers.h"
-/*
-struct MMapVector {
-    int fd = -1;
-    size_t size = 0;
-    double* data = nullptr;
-};
 
-// Convert std::vector to Eigen::VectorXd
-Eigen::VectorXd vectorToEigen(const std::vector<double>& v) {
-    return Eigen::VectorXd::Map(v.data(), v.size());
-}
-
-Eigen::Map<const Eigen::VectorXd> vectorToEigen(const MMapVector& mv) {
-    return Eigen::Map<const Eigen::VectorXd>(mv.data, mv.size);
-}
-
-// Function to calculate the Pearson correlation coefficient
-double correlation_coefficient(const std::vector<double>& x, const std::vector<double>& y) {
-    if (x.size() != y.size() || x.empty()) {
-        throw std::invalid_argument("Vectors must be of same size and non-empty");
-    }
-
-    Eigen::VectorXd X = vectorToEigen(x);
-    Eigen::VectorXd Y = vectorToEigen(y);
-
-    double mean_X = X.mean();
-    double mean_Y = Y.mean();
-
-    Eigen::VectorXd X_centered = X.array() - mean_X;
-    Eigen::VectorXd Y_centered = Y.array() - mean_Y;
-
-    double covariance = (X_centered.dot(Y_centered)) / (X.size() - 1);  // Using (N-1) for sample covariance
-    double stddev_X = std::sqrt(X_centered.squaredNorm() / (X.size() - 1));
-    double stddev_Y = std::sqrt(Y_centered.squaredNorm() / (Y.size() - 1));
-
-    if (stddev_X == 0 || stddev_Y == 0) return 0; // Avoid division by zero
-    
-    return covariance / (stddev_X * stddev_Y);
-}
-
-template <typename VectorTypeX, typename VectorTypeY>
-double correlation_coefficient(const VectorTypeX& x, const VectorTypeY& y) {
-    if (x.size != y.size || x.size == 0) {
-        throw std::invalid_argument("Vectors must be of same size and non-empty");
-    }
-
-    auto X = vectorToEigen(x);
-    auto Y = vectorToEigen(y);
-
-    double mean_X = X.mean();
-    double mean_Y = Y.mean();
-
-    Eigen::VectorXd X_centered = X.array() - mean_X;
-    Eigen::VectorXd Y_centered = Y.array() - mean_Y;
-
-    double covariance = (X_centered.dot(Y_centered)) / (X.size() - 1);
-    double stddev_X = std::sqrt(X_centered.squaredNorm() / (X.size() - 1));
-    double stddev_Y = std::sqrt(Y_centered.squaredNorm() / (Y.size() - 1));
-
-    if (stddev_X == 0 || stddev_Y == 0) return 0;
-
-    return covariance / (stddev_X * stddev_Y);
-}
-
-double latentDistanceCalculator(const std::vector<double>& a, const std::vector<double>& b, int latDim) {
-    double sum = 0.0;
-    for (int i = 0; i < latDim; ++i) {
-        double diff = a[i] - b[i];
-        sum += diff * diff;
-    }
-    return std::sqrt(sum);
-}
-
-double latentMinDistanceCalculator(const std::vector<double>& a, const std::vector<double>& b, int latDim) {
-    double sum1 = 0.0;
-    double sum2 = 0.0;
-    double sum3 = 0.0;
-    double sum4 = 0.0;
-    for (int i = 0; i < latDim; ++i) {
-        double diff1 = a[i] - b[i];
-        sum1 += diff1 * diff1;
-
-        double diff2 = a[i] - b[latDim+i];
-        sum2 += diff2 * diff2;
-
-        double diff3 = a[latDim+i] - b[i];
-        sum3 += diff3 * diff3;
-
-        double diff4 = a[latDim+i] - b[latDim+i];
-        sum4 += diff4 * diff4;
-    }
-    return std::sqrt(std::min({sum1, sum2, sum3, sum4}));
-}
-
-
-template <typename T>
-std::vector<double> flattenAndRemoveNAN(const std::vector<std::vector<T>>& matrix) {
-    std::vector<double> out;
-    for (const auto& row : matrix) {
-        for (const auto& val : row) {
-            if (!std::isnan(static_cast<double>(val))) {
-                out.push_back(static_cast<double>(val));
-            }
-        }
-    }
-    return out;
-}
-
-template <typename T>
-std::vector<double> flattenAndRemoveNANAndFree(std::vector<std::vector<T>>& matrix) {
-    std::vector<double> out;
-    for (auto& row : matrix) {
-        for (auto& val : row) {
-            double d = static_cast<double>(val);
-            if (!std::isnan(d)) {
-                out.push_back(d);
-            }
-        }
-        std::vector<T>().swap(row);
-    }
-    std::vector<std::vector<T>>().swap(matrix);
-    return out;
-}
-
-template <typename T>
-std::vector<std::vector<double>> to_double_vector(const std::vector<std::vector<T>>& v) {
-    std::vector<std::vector<double>> result;
-    result.reserve(v.size());
-    for (const auto& row : v) {
-        std::vector<double> new_row;
-        new_row.reserve(row.size());
-        for (const T& val : row) {
-            new_row.push_back(static_cast<double>(val));
-        }
-        result.push_back(std::move(new_row));
-    }
-    return result;
-}
-
-void writeVectorToDisk(const std::vector<double>& data, const std::string& filename) {
-    std::ofstream ofs(filename, std::ios::binary | std::ios::out);
-    ofs.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(double));
-}
-
-
-
-MMapVector mmapVectorOpen(const std::string& filename) {
-    MMapVector mv;
-    mv.fd = open(filename.c_str(), O_RDONLY);
-    if (mv.fd == -1) throw std::runtime_error("Failed to open file");
-    struct stat sb;
-    if (fstat(mv.fd, &sb) == -1) throw std::runtime_error("fstat failed");
-    mv.size = sb.st_size / sizeof(double);
-    mv.data = static_cast<double*>(
-        mmap(nullptr, sb.st_size, PROT_READ, MAP_PRIVATE, mv.fd, 0)
-    );
-    if (mv.data == MAP_FAILED) throw std::runtime_error("mmap failed");
-    return mv;
-}
-
-void mmapVectorClose(MMapVector& mv) {
-    if (mv.data) {
-        munmap(mv.data, mv.size * sizeof(double));
-        mv.data = nullptr;
-    }
-    if (mv.fd != -1) {
-        close(mv.fd);
-        mv.fd = -1;
-    }
-    mv.size = 0;
-}
-
-inline const double& mmapVectorAt(const MMapVector& mv, size_t i) {
-    return mv.data[i];
-}
-*/
 #ifdef _HAS_MATPLOT_
 void plotScatter(const std::vector<double>& x, const std::vector<double>& y, const std::string& xlabel, const std::string& ylabel, const std::string& title) {
     using namespace matplot;
@@ -395,7 +220,7 @@ void run_modelTest()
 
 
 
-
+/*
     std::vector<std::vector<double>> hau_dist         (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
 
     auto getHauDist= [&](NIBR::MT::TASK task) -> void {
@@ -408,7 +233,7 @@ void run_modelTest()
     writeVectorToDisk(hau, preCalcLoc_path+"hau.bin");
     hau.clear(); hau.shrink_to_fit();
     MMapVector hau_mmap = mmapVectorOpen(preCalcLoc_path+"hau.bin");
-
+*/
 
 
 
@@ -478,12 +303,32 @@ void run_modelTest()
     double max_mdf = *max_it_mdf;
 
     
-
+/*
     double sum_hau = std::accumulate(hau_mmap.data, hau_mmap.data + hau_mmap.size, 0.0);
     double mean_hau = sum_hau / hau_mmap.size;
     auto [min_it_hau, max_it_hau] = std::minmax_element(hau_mmap.data, hau_mmap.data + hau_mmap.size);
     double min_hau = *min_it_hau;
     double max_hau = *max_it_hau;
+*/
+
+
+    disp(MSG_INFO,"Latent Scaling Factor MDF: %.6f", latentScalingFactorMdf);
+    double mean_enc1 = -1.0;
+    double min_enc1 = -1.0;
+    double max_enc1 = -1.0;
+
+    double sum_enc1 = std::accumulate(enc1_mmap.data, enc1_mmap.data + enc1_mmap.size, 0.0);
+    mean_enc1 = (sum_enc1 / enc1_mmap.size) * latentScalingFactorMdf;
+    auto [min_it_enc1, max_it_enc1] = std::minmax_element(enc1_mmap.data, enc1_mmap.data + enc1_mmap.size);
+    min_enc1 = *min_it_enc1;
+    max_enc1 = *max_it_enc1;
+    min_enc1 = min_enc1 * latentScalingFactorMdf;
+    max_enc1 = max_enc1 * latentScalingFactorMdf;
+
+    disp(MSG_INFO,"");
+    disp(MSG_INFO,"Encoded Minimum simple distance between streamlines: %.6f", min_enc1);
+    disp(MSG_INFO,"Encoded Maximum simple distance between streamlines: %.6f", max_enc1);
+    disp(MSG_INFO,"Encoded Average simple distance between streamlines: %.6f", mean_enc1);
 
 
     
@@ -495,19 +340,21 @@ void run_modelTest()
     disp(MSG_INFO,"MDF Average distance between streamlines: %.6f", mean_mdf);
     //disp(MSG_INFO,"MDF Median distance between streamlines: %.6f", median_mdf);
 
+    /*
     disp(MSG_INFO,"");
     disp(MSG_INFO,"Haussdorff Minimum distance between streamlines: %.6f", min_hau);
     disp(MSG_INFO,"Haussdorff Maximum distance between streamlines: %.6f", max_hau);
     disp(MSG_INFO,"Haussdorff Average distance between streamlines: %.6f", mean_hau);
     //disp(MSG_INFO,"Haussdorff Median distance between streamlines: %.6f", median_hau);
+    */
    
     
     
     disp(MSG_INFO,"");
     disp(MSG_INFO,"Pearson correlation coefficients:");
-    disp(MSG_INFO,"Hausdorff and (one-sided) Euc. distance in latent space: %.6f", correlation_coefficient(hau_mmap,enc1_mmap ));
+    //disp(MSG_INFO,"Hausdorff and (one-sided) Euc. distance in latent space: %.6f", correlation_coefficient(hau_mmap,enc1_mmap ));
     disp(MSG_INFO,"MDF and (one-sided) Euc. distance in latent space:       %.6f", correlation_coefficient(mdf_mmap,enc1_mmap ));
-    disp(MSG_INFO,"Hausdorff and MDF:                                       %.6f", correlation_coefficient(hau_mmap,mdf_mmap  ));
+    //disp(MSG_INFO,"Hausdorff and MDF:                                       %.6f", correlation_coefficient(hau_mmap,mdf_mmap  ));
     disp(MSG_INFO,"One-sided and two-sided Euc. distance in latent space:   %.6f", correlation_coefficient(enc1_mmap,enc2_mmap));
 
     disp(MSG_INFO,"");
@@ -516,7 +363,7 @@ void run_modelTest()
     disp(MSG_INFO,"Mean MDF distance between input and reconstructed:       %.6f mm", vectorToEigen(edm).mean());
 
     disp(MSG_INFO,"");
-    disp(MSG_INFO,"Distance scaling factor to match Hausdorff distance:     %.6f", (vectorToEigen(hau_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
+    //disp(MSG_INFO,"Distance scaling factor to match Hausdorff distance:     %.6f", (vectorToEigen(hau_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
     disp(MSG_INFO,"Distance scaling factor to match MDF distance:           %.6f", (vectorToEigen(mdf_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
 
     disp(MSG_INFO,"");
@@ -528,7 +375,7 @@ void run_modelTest()
 
 
     mmapVectorClose(mdf_mmap);
-    mmapVectorClose(hau_mmap);
+    //mmapVectorClose(hau_mmap);
     mmapVectorClose(enc1_mmap);
     mmapVectorClose(enc2_mmap);
     mmapVectorClose(lat1_mmap);

@@ -280,6 +280,25 @@ void run_measureDistances()
     double max_hau = *max_it_hau;
 
 
+    disp(MSG_INFO,"Latent Scaling Factor MDF: %.6f", latentScalingFactorMdf);
+    double mean_enc1 = -1.0;
+    double min_enc1 = -1.0;
+    double max_enc1 = -1.0;
+
+    double sum_enc1 = std::accumulate(enc1_mmap.data, enc1_mmap.data + enc1_mmap.size, 0.0);
+    mean_enc1 = (sum_enc1 / enc1_mmap.size) * latentScalingFactorMdf;
+    auto [min_it_enc1, max_it_enc1] = std::minmax_element(enc1_mmap.data, enc1_mmap.data + enc1_mmap.size);
+    min_enc1 = *min_it_enc1;
+    max_enc1 = *max_it_enc1;
+    min_enc1 = min_enc1 * latentScalingFactorMdf;
+    max_enc1 = max_enc1 * latentScalingFactorMdf;
+
+    disp(MSG_INFO,"");
+    disp(MSG_INFO,"Encoded Minimum simple distance between streamlines: %.6f", min_enc1);
+    disp(MSG_INFO,"Encoded Maximum simple distance between streamlines: %.6f", max_enc1);
+    disp(MSG_INFO,"Encoded Average simple distance between streamlines: %.6f", mean_enc1);
+
+
     
 
 
