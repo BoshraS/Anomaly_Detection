@@ -1,4 +1,5 @@
 #pragma once
+#include "base/multithreader.h"
 #include "nanoflann.hpp"
 #include <Eigen/Dense>
 
@@ -160,7 +161,14 @@ std::vector<std::vector<T>> encodeStreamlines(                              // o
         }
 
     };
+
+    auto tempMaxThreads = NIBR::MT::MAXNUMBEROFTHREADS();
+    NIBR::MT::SETMAXNUMBEROFTHREADS(4);
+
     NIBR::MT::MTRUN(batchCnt, "Encoding streamlines", run);
+
+    NIBR::MT::SETMAXNUMBEROFTHREADS(tempMaxThreads);
+
 
     std::cout << "encoding finisehd" << std::endl;
 

@@ -14,6 +14,7 @@ namespace CMDARGS_FINDCLUSTERCENTERS_LATB {
     int    maxIteration     = 0;
 
     int    batchSize        = 1000000;
+    int    encodeBatchSize  = 10000;
     bool   randomize        = false;
     bool   shuffle          = false;
     bool   useCPU           = false;
@@ -69,6 +70,11 @@ void run_findClusterCenters_latentBrute()
         return;
     }
 
+    if (encodeBatchSize < 1) {
+        disp(MSG_ERROR,"Minimum batchSize is 1");
+        return;
+    }
+
     // Open tractogram reader
     NIBR::TractogramReader tractogram(inp_path, false);
     NIBR::Tractogram tracObj = tractogram.getTractogram();
@@ -91,7 +97,7 @@ void run_findClusterCenters_latentBrute()
     auto run_test_with_type = [&](auto type_placeholder) {
         using T = decltype(type_placeholder);
         std::cout << "starting encode..." << std::endl;
-        auto lat_streamlines = encodeStreamlines<T>(streamlines,model,batchSize);         // Encode streamlines in latent space
+        auto lat_streamlines = encodeStreamlines<T>(streamlines,model,encodeBatchSize);         // Encode streamlines in latent space
         std::cout << "converting to double..." << std::endl;
         enc_streamlines      =  to_double_vector<T>(lat_streamlines);                     // Convert latent space representation to double type for analysis
         std::cout << "finished convertint to double" << std::endl;
