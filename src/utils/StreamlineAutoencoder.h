@@ -162,6 +162,8 @@ std::vector<std::vector<T>> encodeStreamlines(                              // o
     };
     NIBR::MT::MTRUN(batchCnt, "Encoding streamlines", run);
 
+    std::cout << "encoding finisehd" << std::endl;
+
     return latent;
 
 }

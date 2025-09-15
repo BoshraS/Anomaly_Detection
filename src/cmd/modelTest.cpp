@@ -219,8 +219,6 @@ void run_modelTest()
     MMapVector enc2_mmap = mmapVectorOpen(preCalcLoc_path+"enc2.bin");
 
 
-
-/*
     std::vector<std::vector<double>> hau_dist         (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
 
     auto getHauDist= [&](NIBR::MT::TASK task) -> void {
@@ -233,8 +231,6 @@ void run_modelTest()
     writeVectorToDisk(hau, preCalcLoc_path+"hau.bin");
     hau.clear(); hau.shrink_to_fit();
     MMapVector hau_mmap = mmapVectorOpen(preCalcLoc_path+"hau.bin");
-*/
-
 
 
     std::vector<std::vector<double>> mdf_dist         (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
@@ -303,13 +299,13 @@ void run_modelTest()
     double max_mdf = *max_it_mdf;
 
     
-/*
+
     double sum_hau = std::accumulate(hau_mmap.data, hau_mmap.data + hau_mmap.size, 0.0);
     double mean_hau = sum_hau / hau_mmap.size;
     auto [min_it_hau, max_it_hau] = std::minmax_element(hau_mmap.data, hau_mmap.data + hau_mmap.size);
     double min_hau = *min_it_hau;
     double max_hau = *max_it_hau;
-*/
+
 
 
     disp(MSG_INFO,"Latent Scaling Factor MDF: %.6f", latentScalingFactorMdf);
@@ -340,21 +336,21 @@ void run_modelTest()
     disp(MSG_INFO,"MDF Average distance between streamlines: %.6f", mean_mdf);
     //disp(MSG_INFO,"MDF Median distance between streamlines: %.6f", median_mdf);
 
-    /*
+    
     disp(MSG_INFO,"");
     disp(MSG_INFO,"Haussdorff Minimum distance between streamlines: %.6f", min_hau);
     disp(MSG_INFO,"Haussdorff Maximum distance between streamlines: %.6f", max_hau);
     disp(MSG_INFO,"Haussdorff Average distance between streamlines: %.6f", mean_hau);
     //disp(MSG_INFO,"Haussdorff Median distance between streamlines: %.6f", median_hau);
-    */
+    
    
     
     
     disp(MSG_INFO,"");
     disp(MSG_INFO,"Pearson correlation coefficients:");
-    //disp(MSG_INFO,"Hausdorff and (one-sided) Euc. distance in latent space: %.6f", correlation_coefficient(hau_mmap,enc1_mmap ));
+    disp(MSG_INFO,"Hausdorff and (one-sided) Euc. distance in latent space: %.6f", correlation_coefficient(hau_mmap,enc1_mmap ));
     disp(MSG_INFO,"MDF and (one-sided) Euc. distance in latent space:       %.6f", correlation_coefficient(mdf_mmap,enc1_mmap ));
-    //disp(MSG_INFO,"Hausdorff and MDF:                                       %.6f", correlation_coefficient(hau_mmap,mdf_mmap  ));
+    disp(MSG_INFO,"Hausdorff and MDF:                                       %.6f", correlation_coefficient(hau_mmap,mdf_mmap  ));
     disp(MSG_INFO,"One-sided and two-sided Euc. distance in latent space:   %.6f", correlation_coefficient(enc1_mmap,enc2_mmap));
 
     disp(MSG_INFO,"");
@@ -363,7 +359,7 @@ void run_modelTest()
     disp(MSG_INFO,"Mean MDF distance between input and reconstructed:       %.6f mm", vectorToEigen(edm).mean());
 
     disp(MSG_INFO,"");
-    //disp(MSG_INFO,"Distance scaling factor to match Hausdorff distance:     %.6f", (vectorToEigen(hau_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
+    disp(MSG_INFO,"Distance scaling factor to match Hausdorff distance:     %.6f", (vectorToEigen(hau_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
     disp(MSG_INFO,"Distance scaling factor to match MDF distance:           %.6f", (vectorToEigen(mdf_mmap).array() / vectorToEigen(enc1_mmap).array()).mean() );
 
     disp(MSG_INFO,"");
@@ -375,7 +371,7 @@ void run_modelTest()
 
 
     mmapVectorClose(mdf_mmap);
-    //mmapVectorClose(hau_mmap);
+    mmapVectorClose(hau_mmap);
     mmapVectorClose(enc1_mmap);
     mmapVectorClose(enc2_mmap);
     mmapVectorClose(lat1_mmap);

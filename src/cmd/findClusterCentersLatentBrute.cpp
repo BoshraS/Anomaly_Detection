@@ -1,9 +1,10 @@
 #include "cmd.h"
 #include "dMRI/tractography/tractogram.h"
+#include "utils/modelTestHelpers.h"
 
 using namespace NIBR;
 
-namespace CMDARGS_FINDCLUSTERCENTERS_EUC {
+namespace CMDARGS_FINDCLUSTERCENTERS_LATB {
     std::string  inp_path;
     std::string  out_path;
 
@@ -22,47 +23,36 @@ namespace CMDARGS_FINDCLUSTERCENTERS_EUC {
     bool force              = false;
 }
 
-using namespace CMDARGS_FINDCLUSTERCENTERS_EUC;
+using namespace CMDARGS_FINDCLUSTERCENTERS_LATB;
 
-NIBR::StreamlineBatch getRandomBatch(size_t batchId, size_t batchSize, NIBR::Tractogram &tracObj, std::vector<size_t> &randomList) {
+std::vector<std::vector<double>>  getRandomBatch(size_t batchId, size_t batchSize, std::vector<std::vector<double>>  &encStreamlines, std::vector<size_t> &randomList) {
     size_t startIdx = batchId * batchSize;
-    size_t loopCount = std::min(batchSize, tracObj.size() - startIdx);
-    NIBR::StreamlineBatch thisBatch(loopCount);
+    size_t loopCount = std::min(batchSize, encStreamlines.size() - startIdx);
+    std::vector<std::vector<double>>  thisBatch(loopCount);
     for(size_t i = 0; i < loopCount; ++i){
-        thisBatch[i] = tracObj[randomList[startIdx+i]];
+        thisBatch[i] = encStreamlines[randomList[startIdx+i]];
     }
     return thisBatch;
 }
 
-NIBR::StreamlineBatch getOrderedBatch(size_t batchId, size_t batchSize, NIBR::Tractogram &tracObj) {
+std::vector<std::vector<double>>  getOrderedBatch(size_t batchId, size_t batchSize, std::vector<std::vector<double>>  &encStreamlines) {
     size_t startIdx = batchId * batchSize;
-    size_t loopCount = std::min(batchSize, tracObj.size() - startIdx);
-    NIBR::StreamlineBatch thisBatch(loopCount);
+    size_t loopCount = std::min(batchSize, encStreamlines.size() - startIdx);
+    std::vector<std::vector<double>>  thisBatch(loopCount);
     for(size_t i = 0; i < loopCount; ++i){
-        thisBatch[i] = tracObj[startIdx+i];
+        thisBatch[i] = encStreamlines[startIdx+i];
     }
     return thisBatch;
 }
 
-double computeMDF(NIBR::Streamline &s1, NIBR::Streamline &s2) {
-    double sum = 0.0f;
-    for (size_t i = 0; i < s1.size(); ++i) {
-        double dx = s1[i][0] - s2[i][0];
-        double dy = s1[i][1] - s2[i][1];
-        double dz = s1[i][2] - s2[i][2];
-        sum += dx*dx + dy*dy + dz*dz;
-    }
-    return sum / double(s1.size());
-}
-
-void run_findClusterCenters_euclidean()
+void run_findClusterCenters_latentBrute()
 { 
 
     parseCommon(numberOfThreads,verbose);
     if (!parseForceOutput(out_path,force)) return;
 
-    if (getFileExtension(out_path) != "clce") {
-        disp(MSG_ERROR,"Output cluster center file must have .clce extension.");
+    if (getFileExtension(out_path) != "clcl") {
+        disp(MSG_ERROR,"Output cluster center file must have .clcl extension.");
         return;
     }
     
@@ -78,9 +68,44 @@ void run_findClusterCenters_euclidean()
         disp(MSG_ERROR,"Minimum batchSize is 1");
         return;
     }
+
     // Open tractogram reader
     NIBR::TractogramReader tractogram(inp_path, false);
     NIBR::Tractogram tracObj = tractogram.getTractogram();
+
+    // Set model
+    StreamlineAutoencoder model = StreamlineAutoencoder(model_spec, useCPU);
+    if (!model.isReady()) return;
+    
+
+
+    // Original input streamline
+    auto streamlines = NIBR::resampleTractogram_withStepCount(tracObj, model.inpDim);
+
+
+    disp(MSG_DETAIL,"Resampled streamlines for %d points.", model.inpDim);
+
+    // Latent space representations
+    std::vector<std::vector<double>>              enc_streamlines;
+
+    auto run_test_with_type = [&](auto type_placeholder) {
+        using T = decltype(type_placeholder);
+        std::cout << "starting encode..." << std::endl;
+        auto lat_streamlines = encodeStreamlines<T>(streamlines,model,batchSize);         // Encode streamlines in latent space
+        std::cout << "converting to double..." << std::endl;
+        enc_streamlines      =  to_double_vector<T>(lat_streamlines);                     // Convert latent space representation to double type for analysis
+        std::cout << "finished convertint to double" << std::endl;
+    };
+     
+    // Dispatch to the generic lambda with the correct type
+    if (model.dtype == torch::kFloat)       { run_test_with_type(float{});   } 
+    else if (model.dtype == torch::kDouble) { run_test_with_type(double{});  } 
+    else if (model.dtype == torch::kHalf)   { run_test_with_type(at::Half{});} 
+    else { disp(MSG_ERROR, "Unsupported data type for modelTest: %s", c10::toString(model.dtype)); }
+
+
+    NIBR::Tractogram().swap(tracObj);
+
 
     std::vector<int> scnt;
     std::vector<int> scnt_cumSum;
@@ -101,20 +126,19 @@ void run_findClusterCenters_euclidean()
     
 
     // Do the clustering
-    // Could use NIBR::StreamlineBatch but I think it's clearer like this
-    std::vector<NIBR::Streamline> clusterCenters;
+    std::vector<std::vector<double>>  clusterCenters;
 
     disp(MSG_INFO,"Clustering...");
     auto clusteringStartTime = std::chrono::high_resolution_clock::now();
     for (int iter = 0; iter < maxIteration; iter++) {
         
         // Get a batch
-        NIBR::StreamlineBatch batch;
+        std::vector<std::vector<double>>  batch;
 
         if (randomize) {
-            batch = getRandomBatch(iter, batchSize, tracObj, randomList);
+            batch = getRandomBatch(iter, batchSize, enc_streamlines, randomList);
         } else {
-            batch = getOrderedBatch(iter, batchSize, tracObj);
+            batch = getOrderedBatch(iter, batchSize, enc_streamlines);
         }
 
         disp(MSG_DETAIL,"Current batchSize: %d", batchSize);
@@ -131,13 +155,13 @@ void run_findClusterCenters_euclidean()
         // 10000 streamlines in the first iteration when there will be many new clusters,
         // and 1000 streamlines in the other iteration when there will be many existing clusters, and less new clusters.
 
-        std::vector<NIBR::Streamline> localClusterCenters;       // New clusters found in this batch.
+        std::vector<std::vector<double>>  localClusterCenters;       // New clusters found in this batch.
         
         std::vector<std::atomic<bool>> unassigned(batchSize);    // True if a streamline in the batch did not belong to any existing cluster
         for (int i = 0; i < batchSize; ++i) unassigned[i] = false;
 
         std::vector<size_t> unaInd;                              // Indices of the streamlines, which did not belong to any existing cluster
-        std::vector<NIBR::Streamline> unassignedClusterCenters;   // Clusters of the unassigned streamlines that were not clusered within a batch
+        std::vector<std::vector<double>>  unassignedClusterCenters;   // Clusters of the unassigned streamlines that were not clusered within a batch
         size_t taskOffset = 0;
 
         auto addToGlobalCluster = [&](NIBR::MT::TASK task) -> void {
@@ -145,7 +169,7 @@ void run_findClusterCenters_euclidean()
             if (!clusterCenters.empty()) {
                 bool tooClose = false;
                 for (size_t c = 0; c < clusterCenters.size(); ++c) {
-                    double dist = computeMDF(batch[task.no], clusterCenters[c]);
+                    double dist = latentDistanceCalculator(batch[task.no], clusterCenters[c], model.latDim);
                     if (dist < maxDist) {
                         tooClose = true;
                         break;
@@ -167,7 +191,7 @@ void run_findClusterCenters_euclidean()
             if (!localClusterCenters.empty()) {
                 bool tooClose = false;
                 for (size_t c = 0; c < localClusterCenters.size(); ++c) {
-                    double dist = computeMDF(batch[task.no], localClusterCenters[c]);
+                    double dist = latentDistanceCalculator(batch[task.no], localClusterCenters[c], model.latDim);
                     if (dist < maxDist) {
                         tooClose = true;
                         break;
@@ -180,7 +204,7 @@ void run_findClusterCenters_euclidean()
                 {
                     std::lock_guard<std::mutex> guard(mx);
                     for (size_t ind = 0; ind < unassignedClusterCenters.size(); ++ind) {
-                        float dist = computeMDF(batch[rInd], unassignedClusterCenters[ind]);
+                        float dist = latentDistanceCalculator(batch[rInd], unassignedClusterCenters[ind], model.latDim);
                         if (dist < maxDist) return;
                     }
 
@@ -252,7 +276,7 @@ void run_findClusterCenters_euclidean()
 
 
 
-    // Open binary file for writing Euclidean cluster centers
+    // Open binary file for writing cluster centers
     std::ofstream ofs(out_path, std::ios::binary);
     if (!ofs) {
         disp(MSG_ERROR, "Failed to open output file.");
@@ -272,17 +296,20 @@ void run_findClusterCenters_euclidean()
 }          
     
      
-void findClusterCenters_euclidean(CLI::App* app)   
+void findClusterCenters_latentBrute(CLI::App* app)   
 { 
 
     app->formatter(std::make_shared<CustomHelpFormatter>());
 
-    app->description("finds streamline cluster centers in eunclidean space");
+    app->description("finds streamline cluster centers based on their latent space representation using bruteforce");
 
     app->add_option("<input>",               inp_path,           "Input path. Tractogram")
         ->required();
+    
+    app->add_option("<model>",               model_spec,     "Input model, specified with the path to the Torch script file, followed by the input dimensions, latent space dimensions, data type (float or double), and distance scaling factor of the model. E.g. /model/test_model.pt 256 64 float 0.08. ")
+        ->required();
      
-    app->add_option("<output>",              out_path,           "Output latent representations of cluster centers (.clce).")
+    app->add_option("<output>",              out_path,           "Output latent representations of cluster centers (.clcl).")
         ->required();
 
     app->add_option("--maxDist, -d",         maxDist,            "Maximum distance from any cluster center.")
@@ -299,7 +326,7 @@ void findClusterCenters_euclidean(CLI::App* app)
     app->add_option("--verbose, -v",         verbose,            "Verbose level. Options are \"quite\",\"fatal\",\"error\",\"warn\",\"info\" and \"debug\". Default=info");
     app->add_flag("--force, -f",             force,              "Force overwriting of existing file");
 
-    app->callback(run_findClusterCenters_euclidean);  
+    app->callback(run_findClusterCenters_latentBrute);  
      
 }
 

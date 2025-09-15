@@ -81,31 +81,31 @@ void run_compareSpeed()
     double temp_result_mdf = getMDFDistance(streamlines[0], streamlines[1]);
     auto mdfEndTime = std::chrono::high_resolution_clock::now();
     auto mdfDuration = std::chrono::duration_cast<std::chrono::microseconds>(mdfEndTime - mdfStartTime);
-    std::cout << "mdf execution time: " << mdfDuration.count() << " microseconds | result: " << temp_result_mdf << std::endl;
+    disp(MSG_INFO,"MDF execution time: %i microseconds | results: %d", mdfDuration.count(), temp_result_mdf);
 
     auto hausdorffStartTime = std::chrono::high_resolution_clock::now();
     double temp_result_hau = getHausdorffDistance(streamlines[0], streamlines[1]);
     auto hausdorffEndTime = std::chrono::high_resolution_clock::now();
     auto hausdorffduration = std::chrono::duration_cast<std::chrono::microseconds>(hausdorffEndTime - hausdorffStartTime);
-    std::cout << "hausdorff execution time: " << hausdorffduration.count() << " microseconds | result: " << temp_result_hau << std::endl;
+    disp(MSG_INFO,"Hausdorff execution time: %i microseconds | results: %d", hausdorffduration.count(), temp_result_hau);
 
 
     auto latentSimpleStartTime = std::chrono::high_resolution_clock::now();
     double temp_result_ls = 0.067612 * latentDistanceCalculator(enc_streamlines[0], enc_streamlines[1], model.latDim);
     auto latentSimpleEndTime = std::chrono::high_resolution_clock::now();
     auto latentSimpleduration = std::chrono::duration_cast<std::chrono::microseconds>(latentSimpleEndTime - latentSimpleStartTime);
-    std::cout << "latent simple execution time: " << latentSimpleduration.count() << " microseconds | result: " << temp_result_ls << std::endl;
+    disp(MSG_INFO,"Latent simple execution time: %i microseconds | results: %d", latentSimpleduration.count(), temp_result_ls);
 
 
     auto latentMinStartTime = std::chrono::high_resolution_clock::now();
     double temp_result_lm = 0.067612 * latentMinDistanceCalculator(enc_streamlines[0], enc_streamlines[1], model.latDim);
     auto latentMinEndTime = std::chrono::high_resolution_clock::now();
     auto latentMinduration = std::chrono::duration_cast<std::chrono::microseconds>(latentMinEndTime - latentMinStartTime);
-    std::cout << "latent simple execution time: " << latentMinduration.count() << " microseconds | result: " << temp_result_lm << std::endl;
+    disp(MSG_INFO,"Latent min execution time: %i microseconds | results: %d", latentMinduration.count(), temp_result_lm);
 
     // Calculate execution times for one to all
 
-    disp(MSG_INFO,"Calculating execution times for one to all\n");
+    disp(MSG_INFO,"Calculating execution times for some to all\n");
 
     std::vector<std::vector<double>> temp_hau(8196, std::vector<double>(tracObj.size(),NAN));
     auto oneAllHau= [&](NIBR::MT::TASK task) -> void {

@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
     decode(app.add_subcommand("decode", ""));
     findClusterCenters(app.add_subcommand("findClusterCenters", ""));
     findClusterCenters_euclidean(app.add_subcommand("findClusterCentersEuclidean", ""));
+    findClusterCenters_latentBrute(app.add_subcommand("findClusterCentersLatentBrute", ""));
     score(app.add_subcommand("score", ""));
     toTrack(app.add_subcommand("toTrack", ""));
     toImg(app.add_subcommand("toImg", ""));

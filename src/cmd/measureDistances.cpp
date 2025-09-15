@@ -127,45 +127,6 @@ void run_measureDistances()
     };
 
 
-    // Calculate execution times
-
-    auto mdfStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_mdf = getMDFDistance(tracObj[0], tracObj[1]);
-    auto mdfEndTime = std::chrono::high_resolution_clock::now();
-    auto mdfDuration = std::chrono::duration_cast<std::chrono::microseconds>(mdfEndTime - mdfStartTime);
-    std::cout << "mdf execution time: " << mdfDuration.count() << " microseconds | result: " << temp_result_mdf << std::endl;
-
-    auto hausdorffStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_hau = getHausdorffDistance(tracObj[0], tracObj[1]);
-    auto hausdorffEndTime = std::chrono::high_resolution_clock::now();
-    auto hausdorffduration = std::chrono::duration_cast<std::chrono::microseconds>(hausdorffEndTime - hausdorffStartTime);
-    std::cout << "hausdorff execution time: " << hausdorffduration.count() << " microseconds | result: " << temp_result_hau << std::endl;
-
-
-    auto latentSimpleStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_ls = 0.067612 * latentDistanceCalculator(enc_streamlines[0], enc_streamlines[1], model.latDim);
-    auto latentSimpleEndTime = std::chrono::high_resolution_clock::now();
-    auto latentSimpleduration = std::chrono::duration_cast<std::chrono::microseconds>(latentSimpleEndTime - latentSimpleStartTime);
-    std::cout << "latent simple execution time: " << latentSimpleduration.count() << " microseconds | result: " << temp_result_ls << std::endl;
-
-
-    auto latentMinStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_lm = 0.067612 * latentMinDistanceCalculator(enc_streamlines[0], enc_streamlines[1], model.latDim);
-    auto latentMinEndTime = std::chrono::high_resolution_clock::now();
-    auto latentMinduration = std::chrono::duration_cast<std::chrono::microseconds>(latentMinEndTime - latentMinStartTime);
-    std::cout << "latent simple execution time: " << latentMinduration.count() << " microseconds | result: " << temp_result_lm << std::endl;
-    
-
-    // Compute pair-wise distances
-
-    // this takes an absurd amount of memory with bigger tractograms
-    
-    
-    
-    
-
-    disp(MSG_INFO,"Starting getDistances");
-
     std::vector<std::vector<double>> enc_dist1        (tracObj.size(), std::vector<double>(tracObj.size(),NAN));
     auto getEnc1 = [&](NIBR::MT::TASK task) -> void {
         for (size_t i = 0; i < task.no; i++) {
