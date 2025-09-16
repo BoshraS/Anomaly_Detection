@@ -54,22 +54,14 @@ double latentDistanceCalculator(const std::vector<double>& a, const std::vector<
 double latentMinDistanceCalculator(const std::vector<double>& a, const std::vector<double>& b, int latDim) {
     double sum1 = 0.0;
     double sum2 = 0.0;
-    double sum3 = 0.0;
-    double sum4 = 0.0;
     for (int i = 0; i < latDim; ++i) {
         double diff1 = a[i] - b[i];
         sum1 += diff1 * diff1;
 
-        double diff2 = a[i] - b[latDim+i];
+        double diff2 = a[i] - b[latDim-i-1];
         sum2 += diff2 * diff2;
-
-        double diff3 = a[latDim+i] - b[i];
-        sum3 += diff3 * diff3;
-
-        double diff4 = a[latDim+i] - b[latDim+i];
-        sum4 += diff4 * diff4;
     }
-    return std::sqrt(std::min({sum1, sum2, sum3, sum4}));
+    return std::sqrt(std::min({sum1, sum2}));
 }
 
 void writeVectorToDisk(const std::vector<double>& data, const std::string& filename) {

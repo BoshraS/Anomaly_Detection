@@ -83,7 +83,7 @@ void run_measureDistances()
         using T = decltype(type_placeholder);
         auto lat_streamlines = encodeStreamlines<T>(streamlines_resampled,model,batchSize);         // Encode streamlines in latent space
         dec_streamlines      = decodeStreamlines<T>(lat_streamlines, model, batchSize);   // Decode the encoded streamlines
-        enc_streamlines      =  to_double_vector<T>(lat_streamlines);                     // Convert latent space representation to double type for analysis
+        enc_streamlines      =  to_double_vector_remove_flipped<T>(lat_streamlines, model.latDim);                     // Convert latent space representation to double type for analysis
         // disp(MSG_INFO,"Encoding completed.");
     };
      
@@ -129,26 +129,26 @@ void run_measureDistances()
     };
 
     auto mdfStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_mdf = getMDFDistance(tracObj[3456], tracObj[98773]);
+    double temp_result_mdf = getMDFDistance(tracObj[0], tracObj[1]);
     auto mdfEndTime = std::chrono::high_resolution_clock::now();
     auto mdfDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(mdfEndTime - mdfStartTime);
     std::cout << "mdf execution time: " << mdfDuration.count() << " nanoseconds | result: " << temp_result_mdf << std::endl;
 
     auto hausdorffStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_hau = getHausdorffDistance(tracObj[9457], tracObj[1848]);
+    double temp_result_hau = getHausdorffDistance(tracObj[2], tracObj[3]);
     auto hausdorffEndTime = std::chrono::high_resolution_clock::now();
     auto hausdorffduration = std::chrono::duration_cast<std::chrono::nanoseconds>(hausdorffEndTime - hausdorffStartTime);
     std::cout << "hausdorff execution time: " << hausdorffduration.count() << " nanoseconds | result: " << temp_result_hau << std::endl;
 
     auto latentSimpleStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_ls = 0.067612 * latentDistanceCalculator(enc_streamlines[483], enc_streamlines[8452], model.latDim);
+    double temp_result_ls = 0.067612 * latentDistanceCalculator(enc_streamlines[4], enc_streamlines[5], model.latDim);
     auto latentSimpleEndTime = std::chrono::high_resolution_clock::now();
     auto latentSimpleduration = std::chrono::duration_cast<std::chrono::nanoseconds>(latentSimpleEndTime - latentSimpleStartTime);
     std::cout << "latent simple execution time: " << latentSimpleduration.count() << " nanoseconds | result: " << temp_result_ls << std::endl;
 
 
     auto latentMinStartTime = std::chrono::high_resolution_clock::now();
-    double temp_result_lm = 0.067612 * latentMinDistanceCalculator(enc_streamlines[25790], enc_streamlines[83548], model.latDim);
+    double temp_result_lm = 0.067612 * latentMinDistanceCalculator(enc_streamlines[6], enc_streamlines[7], model.latDim);
     auto latentMinEndTime = std::chrono::high_resolution_clock::now();
     auto latentMinduration = std::chrono::duration_cast<std::chrono::nanoseconds>(latentMinEndTime - latentMinStartTime);
     std::cout << "latent min execution time: " << latentMinduration.count() << " nanoseconds | result: " << temp_result_lm << std::endl;
@@ -159,8 +159,8 @@ void run_measureDistances()
 
     size_t testAmount = 10000;
 
-    if(tractogram.getNumberOfStreamlines() > testAmount){
-        testAmount = tractogram.getNumberOfStreamlines()-1;
+    if(testAmount > tractogram.getNumberOfStreamlines()){
+        testAmount = tractogram.getNumberOfStreamlines();
     }
 
 
@@ -190,7 +190,7 @@ void run_measureDistances()
         size_t random1 = dist(gen);
         size_t random2 = dist(gen);
         auto thisTaskTimeStart = std::chrono::high_resolution_clock::now();
-        hauResults[task.no] = getMDFDistance(tracObj[random1], tracObj[random2]);
+        hauResults[task.no] = getHausdorffDistance(tracObj[random1], tracObj[random2]);
         auto thisTaskTimeEnd = std::chrono::high_resolution_clock::now();
         auto thisTaskTimeDuration = std::chrono::duration_cast<std::chrono::nanoseconds>(thisTaskTimeEnd - thisTaskTimeStart);
         durationsVectorHau[task.no] = thisTaskTimeDuration.count();
@@ -216,7 +216,7 @@ void run_measureDistances()
         durationsVectorLat2[task.no] = thisTaskTimeDuration.count();
     };
 
-    NIBR::MT::MTRUN(10000, "Calculating random 1 to 1 streamlines mdf", oneToOneTimesMdf);
+    NIBR::MT::MTRUN(testAmount, "Calculating random 1 to 1 streamlines mdf", oneToOneTimesMdf);
 
     auto averageDistMdf = std::accumulate(mdfResults.begin(), mdfResults.end(), 0.0);
 
@@ -234,7 +234,7 @@ void run_measureDistances()
     disp(MSG_INFO,"AverageDist: %lf", averageDistMdf/testAmount);
 
 
-    NIBR::MT::MTRUN(10000, "Calculating random 1 to 1 streamlines hausdorff", oneToOneTimesHau);
+    NIBR::MT::MTRUN(testAmount, "Calculating random 1 to 1 streamlines hausdorff", oneToOneTimesHau);
 
     auto averageDistHau = std::accumulate(hauResults.begin(), hauResults.end(), 0.0);
 
@@ -251,7 +251,7 @@ void run_measureDistances()
     disp(MSG_INFO,"AverageDist: %lf", averageDistHau/testAmount);
 
 
-    NIBR::MT::MTRUN(10000, "Calculating random 1 to 1 latent simple", oneToOneTimesLat1);
+    NIBR::MT::MTRUN(testAmount, "Calculating random 1 to 1 latent simple", oneToOneTimesLat1);
 
     auto averageDistLat1 = std::accumulate(Lat1Results.begin(), Lat1Results.end(), 0.0);
 
@@ -262,13 +262,13 @@ void run_measureDistances()
     double averageTimeLat1 = static_cast<double>(totalTimeLat1) / durationsVectorLat1.size();
 
     disp(MSG_INFO,"");
-    disp(MSG_INFO,"Average time hau 1 to 1: %lf ns", averageTimeLat1);
+    disp(MSG_INFO,"Average time latent simple 1 to 1: %lf ns", averageTimeLat1);
     disp(MSG_INFO,"Min time latent simple 1 to 1: %lld ns",static_cast<long>(*minMaxLat1.first));
     disp(MSG_INFO,"Max time latent simple 1 to 1: %lld ns",static_cast<long>(*minMaxLat1.second));
     disp(MSG_INFO,"AverageDist: %lf", averageDistLat1/testAmount);
 
 
-    NIBR::MT::MTRUN(10000, "Calculating random 1 to 1 latent min", oneToOneTimesLat2);
+    NIBR::MT::MTRUN(testAmount, "Calculating random 1 to 1 latent min", oneToOneTimesLat2);
 
     auto averageDistLat2 = std::accumulate(Lat2Results.begin(), Lat2Results.end(), 0.0);
 
@@ -279,7 +279,7 @@ void run_measureDistances()
     double averageTimeLat2 = static_cast<double>(totalTimeLat2) / durationsVectorLat2.size();
 
     disp(MSG_INFO,"");
-    disp(MSG_INFO,"Average time hau 1 to 1: %lf ns", averageTimeLat2);
+    disp(MSG_INFO,"Average time latent min 1 to 1: %lf ns", averageTimeLat2);
     disp(MSG_INFO,"Min time latent min 1 to 1: %lld ns",static_cast<long>(*minMaxLat2.first));
     disp(MSG_INFO,"Max time latent min 1 to 1: %lld ns",static_cast<long>(*minMaxLat2.second));
     disp(MSG_INFO,"AverageDist: %lf", averageDistLat2/testAmount);

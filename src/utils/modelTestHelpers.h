@@ -97,6 +97,21 @@ std::vector<std::vector<double>> to_double_vector(const std::vector<std::vector<
     return result;
 }
 
+template <typename T>
+std::vector<std::vector<double>> to_double_vector_remove_flipped(const std::vector<std::vector<T>>& v, size_t latDim) {
+    std::vector<std::vector<double>> result;
+    result.reserve(v.size());
+    for (const auto& row : v) {
+        std::vector<double> new_row;
+        new_row.reserve(latDim);
+        for (std::size_t i = 0; i < latDim && i < row.size(); ++i) {
+            new_row.push_back(static_cast<double>(row[i]));
+        }
+        result.push_back(std::move(new_row));
+    }
+    return result;
+}
+
 void writeVectorToDisk(const std::vector<double>& data, const std::string& filename);
 
 
