@@ -28,6 +28,7 @@ int main(int argc, char *argv[]) {
     modelTest_precalc(app.add_subcommand("modelTest_precalc", ""));
     measureDistance(app.add_subcommand("measureDistance", ""));
     compareSpeed(app.add_subcommand("compareSpeed", ""));
+    compareDistance(app.add_subcommand("compareDistance", ""));
 
     disp(MSG_DEBUG, "Parsing input");
 
