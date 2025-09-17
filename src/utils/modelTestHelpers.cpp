@@ -7,6 +7,7 @@
 #include <string>
 #include <cstddef>
 #include <fstream>
+#include <iostream>
 
 #include "modelTestHelpers.h"
 
@@ -17,6 +18,45 @@ Eigen::VectorXd vectorToEigen(const std::vector<double>& v) {
 
 Eigen::Map<const Eigen::VectorXd> vectorToEigen(const MMapVector& mv) {
     return Eigen::Map<const Eigen::VectorXd>(mv.data, mv.size);
+}
+
+void saveEncodedToDisk(std::vector<std::vector<double>>& encoded_latent, std::string& filename) {
+    std::ofstream outFile(filename, std::ios::binary);
+    if (!outFile) throw std::runtime_error("Cannot open file for writing: " + filename);
+
+    size_t streamlineAmount = encoded_latent.size();
+    size_t latentDim = streamlineAmount > 0 ? encoded_latent[0].size() : 0;
+
+    std::cout << "found streamline amount: " << streamlineAmount << std::endl;
+    std::cout << "found latentdim amount: " << latentDim << std::endl;
+
+
+    outFile.write(reinterpret_cast<const char*>(&streamlineAmount), sizeof(streamlineAmount));
+    outFile.write(reinterpret_cast<const char*>(&latentDim), sizeof(latentDim));
+
+    if (streamlineAmount > 0 && latentDim > 0) {
+        for (const auto& row : encoded_latent) {
+            outFile.write(reinterpret_cast<const char*>(row.data()), latentDim * sizeof(double));
+        }
+    }
+}
+
+std::vector<std::vector<double>> loadEncodedFromDisk(const std::string& filename) {
+    std::ifstream inFile(filename, std::ios::binary);
+    if (!inFile) throw std::runtime_error("Cannot open file for reading: " + filename);
+
+    size_t streamlineAmount, latentDim;
+    inFile.read(reinterpret_cast<char*>(&streamlineAmount), sizeof(streamlineAmount));
+    inFile.read(reinterpret_cast<char*>(&latentDim), sizeof(latentDim));
+
+    std::vector<std::vector<double>> encoded_streamlines(streamlineAmount, std::vector<double>(latentDim));
+    if (streamlineAmount > 0 && latentDim > 0) {
+        for (auto& row : encoded_streamlines) {
+            inFile.read(reinterpret_cast<char*>(row.data()), latentDim * sizeof(double));
+        }
+    }
+
+    return encoded_streamlines;
 }
 
 double correlation_coefficient(const std::vector<double>& x, const std::vector<double>& y) {

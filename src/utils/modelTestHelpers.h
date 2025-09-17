@@ -113,6 +113,8 @@ std::vector<std::vector<double>> to_double_vector_remove_flipped(const std::vect
 }
 
 void writeVectorToDisk(const std::vector<double>& data, const std::string& filename);
+void saveEncodedToDisk(std::vector<std::vector<double>>& encoded_latent, std::string& filename);
+std::vector<std::vector<double>> loadEncodedFromDisk(const std::string& filename);
 
 
 

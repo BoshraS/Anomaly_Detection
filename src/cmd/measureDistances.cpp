@@ -9,9 +9,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <stdexcept>
 #include <string>
 #include <cstddef>
+#include <fstream>
+#include <iostream>
 
 
 #ifdef _HAS_MATPLOT_
@@ -157,11 +158,7 @@ void run_measureDistances()
     std::mt19937 gen(rd());
     std::uniform_int_distribution<size_t> dist(0, tractogram.getNumberOfStreamlines()-1);
 
-    size_t testAmount = 10000;
-
-    if(testAmount > tractogram.getNumberOfStreamlines()){
-        testAmount = tractogram.getNumberOfStreamlines();
-    }
+    size_t testAmount = 1000000;
 
 
     std::vector<long long> durationsVectorMdf(testAmount);
@@ -226,14 +223,33 @@ void run_measureDistances()
 
     double averageTimeMdf = static_cast<double>(totalTimeMdf) / durationsVectorMdf.size();
 
+    double sqDiffSumMdf = 0.0;
+    for (auto t : durationsVectorMdf) {
+        double diff = t - averageTimeMdf;
+        sqDiffSumMdf += diff * diff;
+    }
+    double stdDeviationMdf = std::sqrt(sqDiffSumMdf / testAmount);
+
 
     disp(MSG_INFO,"");
     disp(MSG_INFO,"Average time mdf 1 to 1: %lf ns", averageTimeMdf);
     disp(MSG_INFO,"Min time mdf 1 to 1: %lld ns",static_cast<long>(*minMaxMdf.first));
     disp(MSG_INFO,"Max time mdf 1 to 1: %lld ns",static_cast<long>(*minMaxMdf.second));
+    disp(MSG_INFO,"Standard deviation mdf: %lf ", static_cast<float>(stdDeviationMdf));
     disp(MSG_INFO,"AverageDist: %lf", averageDistMdf/testAmount);
 
+    std::string mdfFilename = "mdf_" + std::to_string(tracObj[0].size()) + ".csv";
+    std::ofstream mdfFile(mdfFilename);
+    if (!mdfFile.is_open()) {
+        std::cerr << "Error: could not open file " << mdfFilename << " for writing\n";
+        return;
+    }
+    for (auto d : durationsVectorMdf) {
+        mdfFile << d << "\n";
+    }
+    mdfFile.close();
 
+    /*
     NIBR::MT::MTRUN(testAmount, "Calculating random 1 to 1 streamlines hausdorff", oneToOneTimesHau);
 
     auto averageDistHau = std::accumulate(hauResults.begin(), hauResults.end(), 0.0);
@@ -249,6 +265,7 @@ void run_measureDistances()
     disp(MSG_INFO,"Min time hau 1 to 1: %lld ns",static_cast<long>(*minMaxHau.first));
     disp(MSG_INFO,"Max time hau 1 to 1: %lld ns",static_cast<long>(*minMaxHau.second));
     disp(MSG_INFO,"AverageDist: %lf", averageDistHau/testAmount);
+    
 
 
     NIBR::MT::MTRUN(testAmount, "Calculating random 1 to 1 latent simple", oneToOneTimesLat1);
@@ -266,6 +283,7 @@ void run_measureDistances()
     disp(MSG_INFO,"Min time latent simple 1 to 1: %lld ns",static_cast<long>(*minMaxLat1.first));
     disp(MSG_INFO,"Max time latent simple 1 to 1: %lld ns",static_cast<long>(*minMaxLat1.second));
     disp(MSG_INFO,"AverageDist: %lf", averageDistLat1/testAmount);
+    */
 
 
     NIBR::MT::MTRUN(testAmount, "Calculating random 1 to 1 latent min", oneToOneTimesLat2);
@@ -278,11 +296,32 @@ void run_measureDistances()
 
     double averageTimeLat2 = static_cast<double>(totalTimeLat2) / durationsVectorLat2.size();
 
+    double sqDiffSumLat2 = 0.0;
+    for (auto t : durationsVectorLat2) {
+        double diff = t - averageTimeLat2;
+        sqDiffSumLat2 += diff * diff;
+    }
+    double stdDeviationLat2 = std::sqrt(sqDiffSumLat2 / testAmount);
+
     disp(MSG_INFO,"");
     disp(MSG_INFO,"Average time latent min 1 to 1: %lf ns", averageTimeLat2);
     disp(MSG_INFO,"Min time latent min 1 to 1: %lld ns",static_cast<long>(*minMaxLat2.first));
     disp(MSG_INFO,"Max time latent min 1 to 1: %lld ns",static_cast<long>(*minMaxLat2.second));
+    disp(MSG_INFO,"Standard deviation latent min: %lf ", static_cast<float>(stdDeviationLat2));
     disp(MSG_INFO,"AverageDist: %lf", averageDistLat2/testAmount);
+
+    std::string lat2Filename = "lat2_" + std::to_string(model.latDim) + ".csv";
+    std::ofstream lat2File(lat2Filename);
+    if (!lat2File.is_open()) {
+        std::cerr << "Error: could not open file " << lat2Filename << " for writing\n";
+        return;
+    }
+    for (auto d : durationsVectorLat2) {
+        lat2File << d << "\n";
+    }
+    lat2File.close();
+
+    return;
 
 
 

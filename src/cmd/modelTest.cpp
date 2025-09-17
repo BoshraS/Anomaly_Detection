@@ -3,6 +3,7 @@
 #include "dMRI/tractography/utility/streamline_operators.h"
 #include <chrono>
 
+#include <iomanip>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -194,11 +195,12 @@ void run_modelTest()
     };
     NIBR::MT::MTRUN(streamlines.size(), "Computing enc 1 distance", getEnc1);
     auto enc1 = flattenAndRemoveNANAndFree(enc_dist1);
-    writeVectorToDisk(enc1, preCalcLoc_path+"enc1.bin");
+    writeVectorToDisk(enc1, preCalcLoc_path + "_" + std::to_string(model.latDim) + "_enc1.bin");
     enc1.clear(); enc1.shrink_to_fit();
-    MMapVector enc1_mmap = mmapVectorOpen(preCalcLoc_path+"enc1.bin");
+    
+    MMapVector enc1_mmap = mmapVectorOpen(preCalcLoc_path + std::to_string(model.latDim) + "_enc1.bin");
 
-
+    
     std::vector<std::vector<double>> enc_dist2        (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
     auto getEnc2 = [&](NIBR::MT::TASK task) -> void {
         for (size_t i = 0; i < task.no; i++) {
@@ -207,9 +209,9 @@ void run_modelTest()
     };
     NIBR::MT::MTRUN(streamlines.size(), "Computing enc 2 distance", getEnc2);
     auto enc2 = flattenAndRemoveNANAndFree(enc_dist2);
-    writeVectorToDisk(enc2, preCalcLoc_path+"enc2.bin");
+    writeVectorToDisk(enc2, preCalcLoc_path+std::to_string(model.latDim) + "_enc1.bin");
     enc2.clear(); enc2.shrink_to_fit();
-    MMapVector enc2_mmap = mmapVectorOpen(preCalcLoc_path+"enc2.bin");
+    MMapVector enc2_mmap = mmapVectorOpen(preCalcLoc_path+std::to_string(model.latDim) + "_enc1.bin");
 
 
     std::vector<std::vector<double>> hau_dist         (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
@@ -221,11 +223,12 @@ void run_modelTest()
     };
     NIBR::MT::MTRUN(streamlines.size(), "Computing hau distance", getHauDist);
     auto hau = flattenAndRemoveNANAndFree(hau_dist);
-    writeVectorToDisk(hau, preCalcLoc_path+"hau.bin");
+    writeVectorToDisk(hau, preCalcLoc_path+std::to_string(tracObj[0].size())+"_hau.bin");
     hau.clear(); hau.shrink_to_fit();
-    MMapVector hau_mmap = mmapVectorOpen(preCalcLoc_path+"hau.bin");
+    MMapVector hau_mmap = mmapVectorOpen(preCalcLoc_path+std::to_string(tracObj[0].size())+"_hau.bin");
+    
 
-
+    
     std::vector<std::vector<double>> mdf_dist         (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
     auto getMDFDist= [&](NIBR::MT::TASK task) -> void {
         for (size_t i = 0; i < task.no; i++) {
@@ -234,9 +237,10 @@ void run_modelTest()
     };
     NIBR::MT::MTRUN(streamlines.size(), "Computing mdf distance", getMDFDist);
     auto mdf = flattenAndRemoveNANAndFree(mdf_dist);
-    writeVectorToDisk(mdf, preCalcLoc_path+"mdf.bin");
+    writeVectorToDisk(mdf, preCalcLoc_path+std::to_string(tracObj[0].size())+"_mdf.bin");
     mdf.clear(); mdf.shrink_to_fit();
-    MMapVector mdf_mmap = mmapVectorOpen(preCalcLoc_path+"mdf.bin");
+    
+    MMapVector mdf_mmap = mmapVectorOpen(preCalcLoc_path+std::to_string(tracObj[0].size())+"_mdf.bin");
 
 
     auto edh  = enc_dec_hau_dist;
@@ -248,6 +252,7 @@ void run_modelTest()
     #endif
 
     double latentScalingFactorMdf = (vectorToEigen(mdf_mmap).array() / vectorToEigen(enc1_mmap).array()).mean();
+    std::cout << "latent scaling factor: " << std::setprecision(20) << latentScalingFactorMdf << std::endl;
 
     disp(MSG_INFO,"Starting lat distance calculations");
 
@@ -262,26 +267,26 @@ void run_modelTest()
 
     NIBR::MT::MTRUN(enc_streamlines.size(), "Computing Lat simple distances", calcLatDistancesSimple);
     auto lat1 = flattenAndRemoveNANAndFree(lat_dist);
-    writeVectorToDisk(lat1, preCalcLoc_path+"lat1.bin");
+    writeVectorToDisk(lat1, preCalcLoc_path+std::to_string(tracObj[0].size())+"_"+std::to_string(model.latDim)+"_lat1.bin");
     lat1.clear(); lat1.shrink_to_fit();
-    MMapVector lat1_mmap = mmapVectorOpen(preCalcLoc_path+"lat1.bin");
+    MMapVector lat1_mmap = mmapVectorOpen(preCalcLoc_path+std::to_string(tracObj[0].size())+"_"+std::to_string(model.latDim)+"_lat1.bin");
 
-
+    
 
 
     std::vector<std::vector<double>> lat_min_dist   (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
 
     auto calcLatDistancesMin = [&](NIBR::MT::TASK task) -> void {
         for(size_t i = 0; i < task.no; ++i) {
-            lat_min_dist[task.no][i] = latentScalingFactorMdf * latentMinDistanceCalculator(enc_streamlines[task.no], enc_streamlines[i], model.latDim);
+            lat_min_dist[task.no][i] = 0.06721245359971696198 * latentMinDistanceCalculator(enc_streamlines[task.no], enc_streamlines[i], model.latDim);
         }
     };
 
     NIBR::MT::MTRUN(enc_streamlines.size(), "Computing Lat min distances", calcLatDistancesMin);
     auto lat2 = flattenAndRemoveNANAndFree(lat_min_dist);
-    writeVectorToDisk(lat2, preCalcLoc_path+"lat2.bin");
+    writeVectorToDisk(lat2, preCalcLoc_path+std::to_string(tracObj[0].size())+"_"+std::to_string(model.latDim)+"_lat2.bin");
     lat2.clear(); lat2.shrink_to_fit();
-    MMapVector lat2_mmap = mmapVectorOpen(preCalcLoc_path+"lat2.bin");
+    MMapVector lat2_mmap = mmapVectorOpen(preCalcLoc_path+std::to_string(tracObj[0].size())+"_"+std::to_string(model.latDim)+"_lat2.bin");
 
 
 
