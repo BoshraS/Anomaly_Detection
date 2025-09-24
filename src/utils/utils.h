@@ -11,7 +11,7 @@ bool decodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
 // inp:   path to input tractogram file
 // out:   path to output file containing latent representations of streamlines
 // force: if true, overwrites out if it already exists
-bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoencoder& model, int batchSize);
+bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoencoder& model, int batchSize, bool skipResample);
 
 
 

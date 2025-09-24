@@ -76,7 +76,7 @@ std::vector<T> flatten_and_flip_streamlines(const NIBR::Tractogram& streamlines)
 // This helper function encodes a batch of streamlines.
 template <typename T>
 std::vector<std::vector<T>> encode_batch(                               // output latent representations <number of streamlines x latDim>
-    const NIBR::Tractogram& streamlines,    // input tractogram <number of streamlines x (variable) number of points x 3>
+    const NIBR::StreamlineBatch& streamlines,    // input tractogram <number of streamlines x (variable) number of points x 3>
     StreamlineAutoencoder& model                                        // model
 )
 {

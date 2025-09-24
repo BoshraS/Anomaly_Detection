@@ -1,12 +1,14 @@
 #include "cmd.h"
 #include "dMRI/tractography/tractogram.h"
 #include "utils/modelTestHelpers.h"
+#include <string>
 
 using namespace NIBR;
 
 namespace CMDARGS_FINDCLUSTERCENTERS_LATB {
     std::string  inp_path;
     std::string  out_path;
+    std::string encodedPath = "";
 
     std::tuple<std::string, int, int, std::string, double> model_spec("", 0, 0, "", 1.0); // module_path, inp_dim, lat_dim, data type, distance scaler
 
@@ -18,10 +20,12 @@ namespace CMDARGS_FINDCLUSTERCENTERS_LATB {
     bool   randomize        = false;
     bool   shuffle          = false;
     bool   useCPU           = false;
+    bool    skipResampleBool = false;
     
     int numberOfThreads     =  0;
     std::string verbose     = "info";
     bool force              = false;
+
 }
 
 using namespace CMDARGS_FINDCLUSTERCENTERS_LATB;
@@ -75,42 +79,66 @@ void run_findClusterCenters_latentBrute()
         return;
     }
 
+
+
     // Open tractogram reader
     NIBR::TractogramReader tractogram(inp_path, false);
-    NIBR::Tractogram tracObj = tractogram.getTractogram();
+    
 
     // Set model
     StreamlineAutoencoder model = StreamlineAutoencoder(model_spec, useCPU);
     if (!model.isReady()) return;
     
-
-
-    // Original input streamline
-    auto streamlines = NIBR::resampleTractogram_withStepCount(tracObj, model.inpDim);
+    NIBR::StreamlineBatch streamlines;
+    
 
 
     disp(MSG_DETAIL,"Resampled streamlines for %d points.", model.inpDim);
 
     // Latent space representations
     std::vector<std::vector<double>>              enc_streamlines;
-
+    
     auto run_test_with_type = [&](auto type_placeholder) {
         using T = decltype(type_placeholder);
         std::cout << "starting encode..." << std::endl;
         auto lat_streamlines = encodeStreamlines<T>(streamlines,model,encodeBatchSize);         // Encode streamlines in latent space
         std::cout << "converting to double..." << std::endl;
-        enc_streamlines      =  to_double_vector<T>(lat_streamlines);                     // Convert latent space representation to double type for analysis
+        enc_streamlines      =  to_double_vector_remove_flipped<T>(lat_streamlines, model.latDim);                     // Convert latent space representation to double type for analysis
         std::cout << "finished convertint to double" << std::endl;
     };
-     
-    // Dispatch to the generic lambda with the correct type
-    if (model.dtype == torch::kFloat)       { run_test_with_type(float{});   } 
-    else if (model.dtype == torch::kDouble) { run_test_with_type(double{});  } 
-    else if (model.dtype == torch::kHalf)   { run_test_with_type(at::Half{});} 
-    else { disp(MSG_ERROR, "Unsupported data type for modelTest: %s", c10::toString(model.dtype)); }
+
+    if(encodedPath != "") {
+        enc_streamlines = loadEncodedFromDisk(encodedPath);
+    } else {
+        
+
+        if(!skipResampleBool) {
+            // Original input streamline
+            NIBR::Tractogram tracObj = tractogram.getTractogram();
+            streamlines = NIBR::resampleTractogram_withStepCount(tracObj, model.inpDim);
+            NIBR::Tractogram().swap(tracObj);
+        } else {
+            streamlines = tractogram.getTractogram();
+        }
+        
+        
 
 
-    NIBR::Tractogram().swap(tracObj);
+        // Dispatch to the generic lambda with the correct type
+        if (model.dtype == torch::kFloat)       { run_test_with_type(float{});   } 
+        else if (model.dtype == torch::kDouble) { run_test_with_type(double{});  } 
+        else if (model.dtype == torch::kHalf)   { run_test_with_type(at::Half{});} 
+        else { disp(MSG_ERROR, "Unsupported data type for modelTest: %s", c10::toString(model.dtype)); }
+
+        
+
+        std::string enc_filename = "encoded_" + std::to_string(enc_streamlines.size()) + "_dim_" + std::to_string(model.latDim) + ".bin";
+        saveEncodedToDisk(enc_streamlines, enc_filename);
+        NIBR::StreamlineBatch().swap(streamlines);
+        
+    }
+
+    
 
 
     std::vector<int> scnt;
@@ -130,6 +158,11 @@ void run_findClusterCenters_latentBrute()
         std::shuffle(randomList.begin(), randomList.end(), g);
     }
     
+    if (randomize) {
+        if (maxIteration < 1) maxIteration = 1;
+    } else {
+        if (maxIteration < 1) maxIteration = std::ceil(float(totalCnt) / float(batchSize));    
+    }
 
     // Do the clustering
     std::vector<std::vector<double>>  clusterCenters;
@@ -175,7 +208,7 @@ void run_findClusterCenters_latentBrute()
             if (!clusterCenters.empty()) {
                 bool tooClose = false;
                 for (size_t c = 0; c < clusterCenters.size(); ++c) {
-                    double dist = latentDistanceCalculator(batch[task.no], clusterCenters[c], model.latDim);
+                    double dist = latentMinDistanceCalculator(batch[task.no], clusterCenters[c], model.latDim);
                     if (dist < maxDist) {
                         tooClose = true;
                         break;
@@ -197,7 +230,7 @@ void run_findClusterCenters_latentBrute()
             if (!localClusterCenters.empty()) {
                 bool tooClose = false;
                 for (size_t c = 0; c < localClusterCenters.size(); ++c) {
-                    double dist = latentDistanceCalculator(batch[task.no], localClusterCenters[c], model.latDim);
+                    double dist = latentMinDistanceCalculator(batch[task.no], localClusterCenters[c], model.latDim);
                     if (dist < maxDist) {
                         tooClose = true;
                         break;
@@ -210,7 +243,7 @@ void run_findClusterCenters_latentBrute()
                 {
                     std::lock_guard<std::mutex> guard(mx);
                     for (size_t ind = 0; ind < unassignedClusterCenters.size(); ++ind) {
-                        float dist = latentDistanceCalculator(batch[rInd], unassignedClusterCenters[ind], model.latDim);
+                        float dist = latentMinDistanceCalculator(batch[rInd], unassignedClusterCenters[ind], model.latDim);
                         if (dist < maxDist) return;
                     }
 
@@ -321,9 +354,13 @@ void findClusterCenters_latentBrute(CLI::App* app)
     app->add_option("--maxDist, -d",         maxDist,            "Maximum distance from any cluster center.")
         ->required();
 
+    app->add_option("--encoded, -e", encodedPath, "A .bin file which contains the encoded streamlines. If given skips the encoding part and uses these directly.");
+
     app->add_option("--maxIteration, -i",    maxIteration,       "Limits maximum number of iterations in constrast to the default, which iterates until all streamlines processed.");
     
     app->add_option("--batchSize, -b",       batchSize,          "Batch size. Number of streamlines to process at each iteration. Default: 1000000");
+
+    app->add_flag("--skipResample, -s", skipResampleBool, "Won't resample the tractogram. If you enable this you are responsible for resampling the tractogram to fit the given model.");
 
     app->add_flag("--randomize, -r",         randomize,          "Shuffle the streamlines before starting");
     app->add_flag("--useCPU, -c",            useCPU,             "Use only CPU without checking any available GPUs.");

@@ -16,6 +16,7 @@ namespace CMDARGS_ENCODE {
     int numberOfThreads     =  0;
     std::string verbose     = "info";
     bool force              = false;
+    bool skipResampleBool = false;
 }
 
 using namespace CMDARGS_ENCODE; 
@@ -46,7 +47,7 @@ void run_encode()
 
     if (isFile) {
         std::cout << "starting encodeandsave" << std::endl;
-        encodeAndSave(inp_path,out_path,!skip,model,batchSize);
+        encodeAndSave(inp_path,out_path,!skip,model,batchSize,skipResampleBool);
         std::cout << "finished encodeandsave" << std::endl;
         return;
     }
@@ -74,7 +75,7 @@ void run_encode()
             disp(MSG_INFO, "Skipping %s -> %s", p.filename().c_str(),out.c_str());    
         } else {
             disp(MSG_INFO, "Processing %s -> %s", p.filename().c_str(),out.c_str());
-            encodeAndSave(t,out,!skip,model,batchSize);
+            encodeAndSave(t,out,!skip,model,batchSize,skipResampleBool);
         }
     }
 
@@ -106,6 +107,8 @@ void encode(CLI::App* app)
 
     app->add_option("--batchSize, -b",       batchSize,          "Batch size. Default: 512.");
     app->add_flag("--useCPU, -c",            useCPU,             "Use only CPU without checking any available GPUs.");
+
+    app->add_flag("--skipResample", skipResampleBool, "Skips resampling the tractogram. You are responsible for resampling the tractogram yourself.");
 
     app->add_option("--numberOfThreads, -n", numberOfThreads,    "Number of threads.");
     app->add_option("--verbose, -v",         verbose,            "Verbose level. Options are \"quite\",\"fatal\",\"error\",\"warn\",\"info\" and \"debug\". Default=info");

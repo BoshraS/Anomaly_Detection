@@ -98,6 +98,13 @@ void run_findClusterCenters_euclidean()
         std::mt19937 g(rd());
         std::shuffle(randomList.begin(), randomList.end(), g);
     }
+
+    // Compute maxIteration if needed
+    if (randomize) {
+        if (maxIteration < 1) maxIteration = 1;
+    } else {
+        if (maxIteration < 1) maxIteration = std::ceil(float(totalCnt) / float(batchSize));    
+    }
     
 
     // Do the clustering

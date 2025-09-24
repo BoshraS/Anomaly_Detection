@@ -1,16 +1,18 @@
 #include "cmd/cmd.h"
 #include "dMRI/tractography/algorithms/ptt/algorithm_ptt.h"
+#include "dMRI/tractography/tractogram.h"
 #include "utils.h"
 
 using namespace NIBR;
 
-bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoencoder& model, int batchSize)
+bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoencoder& model, int batchSize, bool skipResample)
 {
     if (existsFile(out) && !force) return true;
 
     // Create tractogram reader and preload it
     NIBR::TractogramReader _tractogram(inp, true);
-    
+
+    NIBR::MT::SETMAXNUMBEROFTHREADS(1);
 
     // Template that deduces the type T (float, double, at::Half) from its argument.
     auto process_with_type = [&](auto type_placeholder) -> bool {
@@ -27,36 +29,69 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
 
         int N = _tractogram.numberOfStreamlines;
         int batchCnt = (N < batchSize) ? 1 : (N + batchSize - 1) / batchSize;
-        std::vector<std::vector<std::vector<T>>> results(batchCnt);
+
+
+
 
         auto run = [&](NIBR::MT::TASK task) -> void {
+            std::string tmpBatchFile = out + ".batch" + std::to_string(task.no) + ".tmp";
+
+            {
+                std::ifstream ifs(tmpBatchFile, std::ios::binary);
+                if (ifs) {
+                    ifs.seekg(-3, std::ios::end);
+                    char readCheckBytes[3] = {};
+                    ifs.read(readCheckBytes, 3);
+                    if (std::string(readCheckBytes) == "OK") {
+                        disp(MSG_DETAIL, "Skipping completed batch file: %s", tmpBatchFile.c_str());
+                        return;
+                    }
+                }
+            }
+
             int bas = std::min(batchSize, N - (int)task.no * batchSize);
-            NIBR::Tractogram streamlines(bas);
+            NIBR::StreamlineBatch streamlines(bas);
             for (int i = 0; i < bas; i++) {
                 int idx = i + (int)task.no * batchSize;
                 auto tmp = _tractogram.getStreamline(idx);
-                streamlines[i] = resampleStreamline_withStepCount(tmp, model.inpDim);
+                if (!skipResample)
+                    tmp = resampleStreamline_withStepCount(tmp, model.inpDim);
+
+                streamlines[i] = std::move(tmp);
             }
-            results[task.no] = encode_batch<T>(streamlines, model);
+
+            auto encoded = encode_batch<T>(streamlines, model);
+            std::ofstream ofs(tmpBatchFile, std::ios::binary);
+            if (!ofs) {
+                disp(MSG_ERROR, "Failed to open batch file for writing: %s", tmpBatchFile.c_str());
+                return;
+            }
+
+            for (const auto& encoded_streamline : encoded) {
+                ofs.write(reinterpret_cast<const char*>(encoded_streamline.data()), 2 * model.latDim * sizeof(T));
+            }
+
+            const char endCheckBytes[] = "OK";
+            ofs.write(endCheckBytes, sizeof(endCheckBytes));
+            ofs.close();
+
         };
 
         NIBR::MT::MTRUN(batchCnt, "Encoding streamlines", run);
 
         std::cout << "encoding finished "<< std::endl;
 
-        for (const auto& encoded_batch : results) {
-            for (const auto& encoded_streamline : encoded_batch) {
-                ofs.write(reinterpret_cast<const char*>(encoded_streamline.data()), 2 * model.latDim * sizeof(T));
-            }
-        }
-        ofs.close();
 
-        // On success, rename the temporary file to the final output file
-        if (std::rename(tmp_out.c_str(), out.c_str()) != 0) {
-            disp(MSG_ERROR, "Failed to rename temporary file.");
-            return false;
+
+        std::ofstream finalOfs(out, std::ios::binary);
+        for (int i = 0; i < batchCnt; ++i) {
+            std::ifstream ifs(out + ".batch" + std::to_string(i) + ".tmp", std::ios::binary);
+            finalOfs << ifs.rdbuf();
+            ifs.close();
         }
-        std::cout << "just before return" << std::endl;
+        finalOfs.close();
+
+
         return true;
     };
 
