@@ -86,7 +86,14 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
         std::ofstream finalOfs(out, std::ios::binary);
         for (int i = 0; i < batchCnt; ++i) {
             std::ifstream ifs(out + ".batch" + std::to_string(i) + ".tmp", std::ios::binary);
-            finalOfs << ifs.rdbuf();
+
+            std::streamsize size = ifs.tellg();
+            ifs.seekg(0, std::ios::beg);
+            size -= 3;
+
+            std::vector<char> buffer(size);
+            ifs.read(buffer.data(), size);
+            finalOfs.write(buffer.data(), size);
             ifs.close();
         }
         finalOfs.close();
