@@ -1,6 +1,7 @@
 #include "cmd.h"
 #include "dMRI/tractography/tractogram.h"
 #include "utils/modelTestHelpers.h"
+#include <cmath>
 #include <string>
 
 using namespace NIBR;
@@ -93,48 +94,60 @@ void run_findClusterCenters_latentBrute()
     
 
 
-    disp(MSG_DETAIL,"Resampled streamlines for %d points.", model.inpDim);
+    
 
     // Latent space representations
     std::vector<std::vector<double>>              enc_streamlines;
     
     auto run_test_with_type = [&](auto type_placeholder) {
         using T = decltype(type_placeholder);
-        std::cout << "starting encode..." << std::endl;
         auto lat_streamlines = encodeStreamlines<T>(streamlines,model,encodeBatchSize);         // Encode streamlines in latent space
-        std::cout << "converting to double..." << std::endl;
-        enc_streamlines      =  to_double_vector_remove_flipped<T>(lat_streamlines, model.latDim);                     // Convert latent space representation to double type for analysis
-        std::cout << "finished convertint to double" << std::endl;
+        auto enc_streamlines_new      =  to_double_vector_remove_flipped<T>(lat_streamlines, model.latDim);                     // Convert latent space representation to double type for analysis
+
+        enc_streamlines.insert(enc_streamlines.end(), std::make_move_iterator(enc_streamlines_new.begin()), std::make_move_iterator(enc_streamlines_new.end()));
     };
 
     if(encodedPath != "") {
         enc_streamlines = loadEncodedFromDisk(encodedPath);
     } else {
-        
 
-        if(!skipResampleBool) {
-            // Original input streamline
-            NIBR::Tractogram tracObj = tractogram.getTractogram();
-            streamlines = NIBR::resampleTractogram_withStepCount(tracObj, model.inpDim);
-            NIBR::Tractogram().swap(tracObj);
-        } else {
-            streamlines = tractogram.getTractogram();
+        size_t resampleBatchAmount = 1000000;
+        size_t resampleBatchCount = std::ceil((tractogram.getNumberOfStreamlines() + resampleBatchAmount - 1) / resampleBatchAmount);
+
+        NIBR::Tractogram tracObj = tractogram.getTractogram();
+
+        for(size_t i = 0; i < resampleBatchCount; ++i)
+        {
+            disp(MSG_INFO,"Starting resample/encode batch %d.", i);
+            size_t startPos = i * resampleBatchAmount;
+            size_t endPos = std::min(((i + 1) * resampleBatchAmount), tractogram.getNumberOfStreamlines());
+            NIBR::StreamlineBatch slice(tracObj.begin() + startPos,tracObj.begin() + endPos);
+
+            if(!skipResampleBool) {
+                streamlines = NIBR::resampleTractogram_withStepCount(slice, model.inpDim);
+                disp(MSG_DETAIL,"Resampled streamlines for %d points.", model.inpDim);
+            } else {
+                streamlines = slice;
+            }
+
+            // Dispatch to the generic lambda with the correct type
+            if (model.dtype == torch::kFloat)       { run_test_with_type(float{});   } 
+            else if (model.dtype == torch::kDouble) { run_test_with_type(double{});  } 
+            else if (model.dtype == torch::kHalf)   { run_test_with_type(at::Half{});} 
+            else { disp(MSG_ERROR, "Unsupported data type for modelTest: %s", c10::toString(model.dtype)); }
         }
+
+        NIBR::Tractogram().swap(tracObj);
         
+
         
 
 
-        // Dispatch to the generic lambda with the correct type
-        if (model.dtype == torch::kFloat)       { run_test_with_type(float{});   } 
-        else if (model.dtype == torch::kDouble) { run_test_with_type(double{});  } 
-        else if (model.dtype == torch::kHalf)   { run_test_with_type(at::Half{});} 
-        else { disp(MSG_ERROR, "Unsupported data type for modelTest: %s", c10::toString(model.dtype)); }
 
         
 
         std::string enc_filename = "encoded_" + std::to_string(enc_streamlines.size()) + "_dim_" + std::to_string(model.latDim) + ".bin";
         saveEncodedToDisk(enc_streamlines, enc_filename);
-        NIBR::StreamlineBatch().swap(streamlines);
         
     }
 
@@ -182,17 +195,6 @@ void run_findClusterCenters_latentBrute()
 
         disp(MSG_DETAIL,"Current batchSize: %d", batchSize);
 
-        // Shuffle the batch if needed
-
-        // Perform clustering operations on the batch
-        // This will be done in two steps
-        // Step 1. If a streamline is far from all existing cluster centers, keep it as "unassigned".
-        // Step 2. Within in batch, locally cluster all the "unassigned" streamlines, and form localClusterCenters.
-        // Step 3. Append localClusterCenters to clusterCenters
-
-        // For efficiency split the unassigned streamlines into smaller batches of:
-        // 10000 streamlines in the first iteration when there will be many new clusters,
-        // and 1000 streamlines in the other iteration when there will be many existing clusters, and less new clusters.
 
         std::vector<std::vector<double>>  localClusterCenters;       // New clusters found in this batch.
         

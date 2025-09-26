@@ -12,6 +12,10 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
     // Create tractogram reader and preload it
     NIBR::TractogramReader _tractogram(inp, true);
 
+    while(!_tractogram.isReady()){
+        std::cout << "waiting for tractogram" << std::endl;
+    }
+
     NIBR::MT::SETMAXNUMBEROFTHREADS(1);
 
     // Template that deduces the type T (float, double, at::Half) from its argument.
@@ -53,7 +57,9 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
             NIBR::StreamlineBatch streamlines(bas);
             for (int i = 0; i < bas; i++) {
                 int idx = i + (int)task.no * batchSize;
+                std::cout << "getting streamline" << std::endl;
                 auto tmp = _tractogram.getStreamline(idx);
+                std::cout << "got streamline from tractogramReader" << std::endl;
                 if (!skipResample)
                     tmp = resampleStreamline_withStepCount(tmp, model.inpDim);
 
@@ -87,8 +93,12 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
         for (int i = 0; i < batchCnt; ++i) {
             std::ifstream ifs(out + ".batch" + std::to_string(i) + ".tmp", std::ios::binary);
 
+            ifs.seekg(0, std::ios::end);
             std::streamsize size = ifs.tellg();
             ifs.seekg(0, std::ios::beg);
+
+            std::cout << "size before remove check: " << size <<std::endl;
+
             size -= 3;
 
             std::vector<char> buffer(size);

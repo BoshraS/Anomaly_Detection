@@ -236,6 +236,8 @@ void run_findClusterCenters()
 
     disp(MSG_INFO,"Clustering...");
     int totRead = 0;
+
+    auto clusteringStartTime = std::chrono::high_resolution_clock::now();
     for (int iter = 0; iter < maxIteration; iter++) {
         
         // Get a batch
@@ -419,7 +421,9 @@ void run_findClusterCenters()
         disp(MSG_INFO,"Unassigned streamlines: %d - New clusters found: %d - Total clusters: %d", unassignedCnt, localClusterCenters.size(), clusterCenters.size());
 
     }
-    disp(MSG_INFO,"Done");
+    auto clusteringEndTime = std::chrono::high_resolution_clock::now();
+    auto latentMinduration = std::chrono::duration_cast<std::chrono::seconds>(clusteringEndTime - clusteringStartTime);
+    disp(MSG_INFO,"Done. Time taken: %li seconds", latentMinduration);
 
     // Close all the files
     for (auto f : file) {
