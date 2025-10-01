@@ -10,6 +10,7 @@ void encode(CLI::App* app);
 void decode(CLI::App* app);
 void findClusterCenters(CLI::App* app);
 void score(CLI::App* app);
+void score_latent(CLI::App* app);
 void toTrack(CLI::App* app);
 void toImg(CLI::App* app);
 

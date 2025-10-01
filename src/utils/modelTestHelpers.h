@@ -52,6 +52,8 @@ double latentDistanceCalculator(const std::vector<double>& a, const std::vector<
 
 double latentMinDistanceCalculator(const std::vector<double>& a, const std::vector<double>& b, int latDim);
 
+double latentMinDistanceCalculatorEigen(const Eigen::VectorXf& a, const Eigen::VectorXf& b, int latDim);
+
 
 template <typename T>
 std::vector<double> flattenAndRemoveNAN(const std::vector<std::vector<T>>& matrix) {

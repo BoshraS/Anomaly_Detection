@@ -22,6 +22,7 @@ int main(int argc, char *argv[]) {
     findClusterCenters_euclidean(app.add_subcommand("findClusterCentersEuclidean", ""));
     findClusterCenters_latentBrute(app.add_subcommand("findClusterCentersLatentBrute", ""));
     score(app.add_subcommand("score", ""));
+    score_latent(app.add_subcommand("score_latent", ""));
     toTrack(app.add_subcommand("toTrack", ""));
     toImg(app.add_subcommand("toImg", ""));
     modelTest(app.add_subcommand("modelTest", ""));

@@ -104,6 +104,19 @@ double latentMinDistanceCalculator(const std::vector<double>& a, const std::vect
     return std::sqrt(std::min({sum1, sum2}));
 }
 
+double latentMinDistanceCalculatorEigen(const Eigen::VectorXf& a, const Eigen::VectorXf& b, int latDim) {
+    double sum1 = 0.0;
+    double sum2 = 0.0;
+    for (int i = 0; i < latDim; ++i) {
+        double diff1 = a[i] - b[i];
+        sum1 += diff1 * diff1;
+
+        double diff2 = a[i] - b[latDim - i - 1];
+        sum2 += diff2 * diff2;
+    }
+    return std::sqrt(std::min(sum1, sum2));
+}
+
 void writeVectorToDisk(const std::vector<double>& data, const std::string& filename) {
     std::ofstream ofs(filename, std::ios::binary | std::ios::out);
     if (!ofs) {

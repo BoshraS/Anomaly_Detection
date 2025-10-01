@@ -1,8 +1,9 @@
 #include "cmd.h"
+#include "utils/modelTestHelpers.h"
 
 using namespace NIBR;
 
-namespace CMDARGS_SCORE {
+namespace CMDARGS_SCORE_LATENT {
     std::string  inp_path;
     std::string  out_path;
     std::string  out_labels = "";
@@ -18,37 +19,10 @@ namespace CMDARGS_SCORE {
     bool force              = false;
 }
 
-using namespace CMDARGS_SCORE;
-
-// Function to flatten and flip the streamline data
-std::vector<float> makeFlat(const std::vector<std::vector<std::vector<float>>>& streamlines, int bas) {
-
-    std::vector<float> flattened(2 * bas * 3 * 256);
-
-    size_t index = 0;
-
-    for (const auto& streamline : streamlines) {
-
-        // Append streamline 
-        for (int j = 0; j < 3; ++j) {
-            for (int k = 0; k < 256; ++k) {
-                flattened[index++] = streamline[k][j];
-            }
-        }
-
-        // Flip and append streamline
-        for (int j = 0; j < 3; ++j) {
-            for (int k = 255; k > -1; --k) {
-                flattened[index++] = streamline[k][j];
-            }
-        }
-
-    }
-    return flattened;
-}
+using namespace CMDARGS_SCORE_LATENT;
 
 // Reads latent representations of streamlines from .bin file
-std::vector<Eigen::VectorXf> readClusterCenters(const std::string& fname, StreamlineAutoencoder& model) {
+std::vector<Eigen::VectorXf> readClusterCenters_(const std::string& fname, StreamlineAutoencoder& model) {
     std::ifstream ifs(fname, std::ios::binary | std::ios::ate | std::ios::in);
     if (!ifs.is_open()) {
         disp(MSG_ERROR,"Failed to open file: %s", fname.c_str());
@@ -77,8 +51,10 @@ std::vector<Eigen::VectorXf> readClusterCenters(const std::string& fname, Stream
 }
 
 
+
+
  
-void run_score()
+void run_score_latent()
 { 
 
     parseCommon(numberOfThreads,verbose);
@@ -123,7 +99,7 @@ void run_score()
     // Read latent space representation of cluster centers
     disp(MSG_DETAIL,"Reading cluster centers");
     PointCloud cloud;
-    cloud.points = readClusterCenters(clc_path,model);
+    cloud.points = readClusterCenters_(clc_path,model);
 
     // Build the KD-Tree
     typedef nanoflann::KDTreeSingleIndexAdaptor<nanoflann::L2_Simple_Adaptor<float, PointCloud>,PointCloud,-1> KDTree;
@@ -138,7 +114,21 @@ void run_score()
 
     disp(MSG_DETAIL,"Starting scoring of %d streamlines using %d cluster centers", N, cloud.points.size());
 
+    auto bruteForceNN = [&](const Eigen::VectorXf& query, size_t& bestIndex, double& bestDist) {
+        bestDist  = std::numeric_limits<double>::max();
+        bestIndex = 0;
+        for (size_t i = 0; i < cloud.points.size(); i++) {
+            double d = latentMinDistanceCalculatorEigen(query, cloud.points[i], model.latDim);
+            if (d < bestDist) {
+                bestDist  = d;
+                bestIndex = i;
+            }
+        }
+    };
+
     // Iterate through the whole tractogram in batches
+
+
     auto clusteringStartTime = std::chrono::high_resolution_clock::now();
     for (int batchNo = 0; batchNo < batchCnt; batchNo++) {
 
@@ -162,27 +152,11 @@ void run_score()
         }
 
         auto calcScore = [&](NIBR::MT::TASK task) -> void {
-
-            size_t closestCenterIndex1, closestCenterIndex2;
-            float  dist1, dist2;
-
-            nanoflann::KNNResultSet<float> resultSet1(1);
-            resultSet1.init(&closestCenterIndex1, &dist1);
-            kdtree.findNeighbors(resultSet1,   batch[2*task.no].data(), nanoflann::SearchParameters());
-
-            nanoflann::KNNResultSet<float> resultSet2(1);
-            resultSet2.init(&closestCenterIndex2, &dist2);
-            kdtree.findNeighbors(resultSet2, batch[2*task.no+1].data(), nanoflann::SearchParameters());
-
-            // Approximate physical space distance by multiplying the average Euclidean distance by 5
-            if (dist1 < dist2) {
-                scores  [task.no + batchNo * batchSize] = std::sqrt(dist1) * model.distScaler;
-                clusters[task.no + batchNo * batchSize] = closestCenterIndex1 + 1; // Adding one so min cluster label is 1
-            } else {
-                scores  [task.no + batchNo * batchSize] = std::sqrt(dist2) * model.distScaler;
-                clusters[task.no + batchNo * batchSize] = closestCenterIndex2 + 1; // Adding one so min cluster label is 1
-            }
-
+            size_t closestCenterIndex;
+            double dist;
+            bruteForceNN(batch[2*task.no], closestCenterIndex, dist);
+            scores  [task.no + batchNo * batchSize] = dist * model.distScaler;
+            clusters[task.no + batchNo * batchSize] = closestCenterIndex + 1;
         };
 
         NIBR::MT::MTRUN(curBatchSize, "Computing anomaly scores " + to_string_with_precision(batchNo+1) + " / " + to_string_with_precision(batchCnt) , calcScore);
@@ -223,7 +197,7 @@ void run_score()
 }          
     
      
-void score(CLI::App* app)   
+void score_latent(CLI::App* app)   
 { 
 
     app->formatter(std::make_shared<CustomHelpFormatter>());
@@ -254,7 +228,7 @@ void score(CLI::App* app)
     app->add_option("--verbose, -v",           verbose,            "Verbose level. Options are \"quite\",\"fatal\",\"error\",\"warn\",\"info\" and \"debug\". Default=info");
     app->add_flag("--force, -f",               force,              "Force overwriting of existing file");
 
-    app->callback(run_score);  
+    app->callback(run_score_latent);  
      
 }
 
