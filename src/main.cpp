@@ -23,6 +23,7 @@ int main(int argc, char *argv[]) {
     findClusterCenters_latentBrute(app.add_subcommand("findClusterCentersLatentBrute", ""));
     score(app.add_subcommand("score", ""));
     score_latent(app.add_subcommand("score_latent", ""));
+    score_euc(app.add_subcommand("score_euc", ""));
     toTrack(app.add_subcommand("toTrack", ""));
     toImg(app.add_subcommand("toImg", ""));
     modelTest(app.add_subcommand("modelTest", ""));
@@ -30,6 +31,7 @@ int main(int argc, char *argv[]) {
     measureDistance(app.add_subcommand("measureDistance", ""));
     compareSpeed(app.add_subcommand("compareSpeed", ""));
     compareDistance(app.add_subcommand("compareDistance", ""));
+    kmeans_euclidean(app.add_subcommand("kmeansEuclidean", ""));
 
     disp(MSG_DEBUG, "Parsing input");
 

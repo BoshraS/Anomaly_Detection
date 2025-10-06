@@ -151,7 +151,7 @@ void run_findClusterCenters_latentBrute()
         
     }
 
-    
+    float adjMaxDist = (maxDist/model.distScaler);
 
 
     std::vector<int> scnt;
@@ -211,7 +211,7 @@ void run_findClusterCenters_latentBrute()
                 bool tooClose = false;
                 for (size_t c = 0; c < clusterCenters.size(); ++c) {
                     double dist = latentMinDistanceCalculator(batch[task.no], clusterCenters[c], model.latDim);
-                    if (dist < maxDist) {
+                    if (dist < adjMaxDist) {
                         tooClose = true;
                         break;
                     }
@@ -233,7 +233,7 @@ void run_findClusterCenters_latentBrute()
                 bool tooClose = false;
                 for (size_t c = 0; c < localClusterCenters.size(); ++c) {
                     double dist = latentMinDistanceCalculator(batch[task.no], localClusterCenters[c], model.latDim);
-                    if (dist < maxDist) {
+                    if (dist < adjMaxDist) {
                         tooClose = true;
                         break;
                     }
@@ -246,7 +246,7 @@ void run_findClusterCenters_latentBrute()
                     std::lock_guard<std::mutex> guard(mx);
                     for (size_t ind = 0; ind < unassignedClusterCenters.size(); ++ind) {
                         float dist = latentMinDistanceCalculator(batch[rInd], unassignedClusterCenters[ind], model.latDim);
-                        if (dist < maxDist) return;
+                        if (dist < adjMaxDist) return;
                     }
 
                     unassignedClusterCenters.push_back(batch[rInd]);

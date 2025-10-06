@@ -249,7 +249,7 @@ void run_measureDistances()
     }
     mdfFile.close();
 
-    /*
+    
     NIBR::MT::MTRUN(testAmount, "Calculating random 1 to 1 streamlines hausdorff", oneToOneTimesHau);
 
     auto averageDistHau = std::accumulate(hauResults.begin(), hauResults.end(), 0.0);
@@ -283,7 +283,7 @@ void run_measureDistances()
     disp(MSG_INFO,"Min time latent simple 1 to 1: %lld ns",static_cast<long>(*minMaxLat1.first));
     disp(MSG_INFO,"Max time latent simple 1 to 1: %lld ns",static_cast<long>(*minMaxLat1.second));
     disp(MSG_INFO,"AverageDist: %lf", averageDistLat1/testAmount);
-    */
+    
 
 
     NIBR::MT::MTRUN(testAmount, "Calculating random 1 to 1 latent min", oneToOneTimesLat2);
