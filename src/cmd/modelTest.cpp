@@ -120,10 +120,18 @@ void run_modelTest()
     if (!model.isReady()) return;
 
     // Prepare tractogram
-    NIBR::TractogramReader tractogram(inp_path);
+    NIBR::TractogramReader tractogram(inp_path, false);
+
+    if(!tractogram.isReady()){
+        disp(MSG_ERROR, "Failed opening tractogram.");
+        return;
+    }
+
+    NIBR::Tractogram tracObj = tractogram.getTractogram();
+
 
     // Original input streamline
-    std::vector<std::vector<std::vector<float>>>  streamlines = resampleTractogram_withStepCount(&tractogram, model.inpDim);
+    NIBR::StreamlineBatch  streamlines = resampleTractogram_withStepCount(tracObj, model.inpDim);
 
     disp(MSG_DETAIL,"Resampled streamlines for %d points.", model.inpDim);
 
@@ -131,7 +139,7 @@ void run_modelTest()
     std::vector<std::vector<double>>              enc_streamlines;
 
     // Decoded streamlines from the latent space representations
-    std::vector<std::vector<std::vector<float>>>  dec_streamlines;
+    NIBR::StreamlineBatch  dec_streamlines;
 
     auto run_test_with_type = [&](auto type_placeholder) {
         using T = decltype(type_placeholder);

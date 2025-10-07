@@ -308,6 +308,8 @@ void run_findClusterCenters()
 
         };
 
+        std::mutex mx;
+
         auto addToLocalCluster = [&](NIBR::MT::TASK task) -> void {
 
             size_t rInd = unaInd[task.no+taskOffset];
@@ -328,7 +330,7 @@ void run_findClusterCenters()
             }
 
             {
-                NIBR::MT::PROC_MX().lock();
+                mx.lock();
 
                 for (size_t ind = 0; ind < unassignedClusterCenters.size(); ind++) {
 
@@ -343,13 +345,13 @@ void run_findClusterCenters()
                     }
 
                     if (std::min(sum1,sum2) < adjMaxDist) {
-                        NIBR::MT::PROC_MX().unlock();
+                        mx.unlock();
                         return;
                     }
                 }
 
                 unassignedClusterCenters.push_back(batch[rInd]);
-                NIBR::MT::PROC_MX().unlock();
+                mx.unlock();
                 return;                
             }   
 
