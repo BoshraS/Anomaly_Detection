@@ -10,7 +10,7 @@ namespace CMDARGS_FINDCLUSTERCENTERS_EUC {
 
     std::tuple<std::string, int, int, std::string, double> model_spec("", 0, 0, "", 1.0); // module_path, inp_dim, lat_dim, data type, distance scaler
 
-    float  maxDist;
+    float  maxDist          = 1;
     int    maxIteration     = 0;
 
     int    batchSize        = 1000000;
@@ -58,6 +58,8 @@ void run_findClusterCenters_euclidean()
     size_t totalCnt = tractogram.getNumberOfStreamlines();
 
     //Create random order
+
+    maxDist = maxDist * maxDist;
     
     std::vector<size_t> randomList;
     if(randomize){
@@ -82,7 +84,7 @@ void run_findClusterCenters_euclidean()
     // Could use NIBR::StreamlineBatch but I think it's clearer like this
     std::vector<NIBR::Streamline> clusterCenters;
 
-    disp(MSG_INFO,"Clustering...");
+    disp(MSG_INFO,"Clustering... %d streamlines", tractogram.getNumberOfStreamlines());
     auto clusteringStartTime = std::chrono::high_resolution_clock::now();
     for (int iter = 0; iter < maxIteration; iter++) {
         
@@ -123,7 +125,7 @@ void run_findClusterCenters_euclidean()
             if (!clusterCenters.empty()) {
                 bool tooClose = false;
                 for (size_t c = 0; c < clusterCenters.size(); ++c) {
-                    double dist = computeMDF(batch[task.no], clusterCenters[c]);
+                    double dist = computeMDFSquared(batch[task.no], clusterCenters[c]);
                     if (dist < maxDist) {
                         tooClose = true;
                         break;
@@ -145,7 +147,7 @@ void run_findClusterCenters_euclidean()
             if (!localClusterCenters.empty()) {
                 bool tooClose = false;
                 for (size_t c = 0; c < localClusterCenters.size(); ++c) {
-                    double dist = computeMDF(batch[task.no], localClusterCenters[c]);
+                    double dist = computeMDFSquared(batch[task.no], localClusterCenters[c]);
                     if (dist < maxDist) {
                         tooClose = true;
                         break;
@@ -158,7 +160,7 @@ void run_findClusterCenters_euclidean()
                 {
                     std::lock_guard<std::mutex> guard(mx);
                     for (size_t ind = 0; ind < unassignedClusterCenters.size(); ++ind) {
-                        float dist = computeMDF(batch[rInd], unassignedClusterCenters[ind]);
+                        float dist = computeMDFSquared(batch[rInd], unassignedClusterCenters[ind]);
                         if (dist < maxDist) return;
                     }
 

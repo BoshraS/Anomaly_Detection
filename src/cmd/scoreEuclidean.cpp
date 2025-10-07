@@ -2,6 +2,7 @@
 #include "cmd.h"
 #include "dMRI/tractography/tractogram.h"
 #include <ATen/core/Dimname.h>
+#include <utils/clusterHelpers.h>
 
 using namespace NIBR;
 
@@ -61,17 +62,6 @@ std::vector<NIBR::Streamline> readClusterCentersEuclidean(const std::string& fna
     return clusterCenters;
 }
 
-double computeMDF_(NIBR::Streamline &s1, NIBR::Streamline &s2) {
-    double sum = 0.0f;
-    for (size_t i = 0; i < s1.size(); ++i) {
-        double dx = s1[i][0] - s2[i][0];
-        double dy = s1[i][1] - s2[i][1];
-        double dz = s1[i][2] - s2[i][2];
-        sum += dx*dx + dy*dy + dz*dz;
-    }
-    return sum / double(s1.size());
-}
-
 
 
  
@@ -115,7 +105,7 @@ void run_score_euc()
         bestDist  = std::numeric_limits<double>::max();
         bestIndex = 0;
         for (size_t i = 0; i < clusterCenters.size(); i++) {
-            double d = computeMDF_(query, clusterCenters[i]);
+            double d = computeMDF(query, clusterCenters[i]);
             if (d < bestDist) {
                 bestDist  = d;
                 bestIndex = i;

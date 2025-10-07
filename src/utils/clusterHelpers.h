@@ -8,6 +8,8 @@ NIBR::StreamlineBatch getRandomBatch(size_t batchId, size_t batchSize, NIBR::Tra
 
 NIBR::StreamlineBatch getOrderedBatch(size_t batchId, size_t batchSize, NIBR::Tractogram &tracObj);
 
+double computeMDFSquared(NIBR::Streamline &s1, NIBR::Streamline &s2);
+
 double computeMDF(NIBR::Streamline &s1, NIBR::Streamline &s2);
 
 #endif
