@@ -6,7 +6,7 @@ namespace CMDARGS_ENCODE {
     std::string  inp_path;
     std::string  out_path;
 
-    std::tuple<std::string, int, int> model_spec("", 0, 0); // module_path, inp_dim, lat_dim
+    std::tuple<std::string, int, int, std::string> model_spec("", 0, 0, ""); // module_path, inp_dim, lat_dim, datatype
 
     int  batchSize          = 512;
     bool useCPU             = false;
@@ -98,7 +98,7 @@ void encode(CLI::App* app)
     app->add_option("<output>",              out_path,           "Output path. Either a file (.bin) or a folder.")
         ->required();
 
-    app->add_option("--model,-m",            model_spec,         "Input model, specified with the path to the Torch script file, followed by the input dimensions and latent space dimensions. E.g. /model/test_model.pt 256 64");
+    app->add_option("--model,-m",            model_spec,         "Input model, specified with the path to the Torch script file, followed by the input dimensions, latent space dimensions and data type (float or double). E.g. /model/test_model.pt 256 64 float");
 
     app->add_flag("--skip, -s",              skip,               "Skip if the output exists.");
 

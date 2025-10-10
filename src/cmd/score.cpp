@@ -8,7 +8,7 @@ namespace CMDARGS_SCORE {
     std::string  out_labels = "";
     std::string  clc_path;
 
-    std::tuple<std::string, int, int, float> model_spec("", 0, 0, 1.0f); // module_path, inp_dim, lat_dim, distance scaler
+    std::tuple<std::string, int, int, std::string, double> model_spec("", 0, 0, "", 1.0); // module_path, inp_dim, lat_dim, data type, distance scaler
 
     int  batchSize          = 1000000;
     bool useCPU             = false;

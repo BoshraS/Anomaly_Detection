@@ -12,13 +12,15 @@ Step 3. Run the `build.sh` script
 
 #### Dependencies
 - [Nibrary](https://github.com/nibrary/nibrary)
+    - Tested with [v0.4.2](https://github.com/nibrary/nibrary/tree/v0.4.2)
 - [LibTorch](https://pytorch.org/)
     - If CUDA version is installed, GPU acceleration will be used.
     - Make sure to install the cxx11 ABI version of LibTorch!
+    - Tested with [CUDA v12.9](https://download.pytorch.org/libtorch/cu129/libtorch-shared-with-deps-2.8.0%2Bcu129.zip)
 
-#### Optional dependency
-- [Matplot++](https://github.com/alandefreitas/matplotplusplus)
-    - Used for testing the streamline encoder-decoder model. If Matplot++ is available, charts will be plotted, otherwise results are printed on the terminal.
+#### Optional
+- [Matplotlib](https://matplotlib.org/)
+    - Used for testing the streamline encoder-decoder model. If a Python environment with matplotlib available, charts will be plotted, otherwise results are only printed on the terminal.
     
 
 

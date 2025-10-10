@@ -1,19 +1,24 @@
 #!/bin/bash
 
 cmakeExe=cmake
-buildType=Release #Release or Debug
-buildShared=OFF
+buildType=Release # Release or Debug
 buildDir=build
+buildShared=OFF
+enableMatplotlib=ON # If enabled, make sure that your default Python environment has matplotlib installed
 
-Torch_DIR="/opt/libtorch-cuda/share/cmake/Torch"
-inc_path="../nibrary/build-static/install/include/nibrary_v0.1"
-lib_path="../nibrary/build-static/install/lib/nibrary_v0.1"
+# Path to CUDA and libtorch
+Torch_DIR="/opt/libtorch/share/cmake/Torch"
 
-c_compiler=/bin/gcc-12
-cxx_compiler=/bin/g++-12
+# Path to nibrary
+inc_path="../nibrary/build-static/install/include/nibrary_v0.4.2"
+lib_path="../nibrary/build-static/install/lib/nibrary_v0.4.2"
+
+# Path to compiler
+c_compiler=/bin/gcc
+cxx_compiler=/bin/g++
 
 
-# rm -rf ${buildDir}
+rm -rf ${buildDir}
 mkdir -p ${buildDir}
 cd ${buildDir}
 
@@ -25,6 +30,7 @@ ${cmakeExe} \
 -DCMAKE_INCLUDE_PATH=${inc_path} \
 -DCMAKE_LIBRARY_PATH=${lib_path} \
 -DBUILD_SHARED_LIBS=${buildShared} \
+-DENABLE_MATPLOTLIB=${enableMatplotlib} \
 ..
 
 ${cmakeExe} --build . --config ${buildType} --target install --parallel 16

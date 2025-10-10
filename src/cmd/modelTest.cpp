@@ -1,16 +1,11 @@
 #include "cmd.h"
 
-
-#ifdef _HAS_MATPLOT_
-#include <matplot/matplot.h>
-#endif
-
 using namespace NIBR;
 
 namespace CMDARGS_MODELTEST {
     std::string  inp_path;
     
-    std::tuple<std::string, int, int> inp_model_spec("", 0, 0); // module_path, inp_dim, lat_dim
+    std::tuple<std::string, int, int, std::string> inp_model_spec("", 0, 0, ""); // module_path, inp_dim, lat_dim, data type
 
     int  batchSize          = 512;
     bool useCPU             = false;
@@ -22,79 +17,145 @@ namespace CMDARGS_MODELTEST {
 
 using namespace CMDARGS_MODELTEST; 
 
-// Convert std::vector to Eigen::VectorXf
-Eigen::VectorXf vectorToEigen(const std::vector<float>& v) {
-    return Eigen::VectorXf::Map(v.data(), v.size());
+// Convert std::vector to Eigen::VectorXd
+Eigen::VectorXd vectorToEigen(const std::vector<double>& v) {
+    return Eigen::VectorXd::Map(v.data(), v.size());
 }
 
 // Function to calculate the Pearson correlation coefficient
-float correlation_coefficient(const std::vector<float>& x, const std::vector<float>& y) {
+double correlation_coefficient(const std::vector<double>& x, const std::vector<double>& y) {
     if (x.size() != y.size() || x.empty()) {
         throw std::invalid_argument("Vectors must be of same size and non-empty");
     }
 
-    Eigen::VectorXf X = vectorToEigen(x);
-    Eigen::VectorXf Y = vectorToEigen(y);
+    Eigen::VectorXd X = vectorToEigen(x);
+    Eigen::VectorXd Y = vectorToEigen(y);
 
-    float mean_X = X.mean();
-    float mean_Y = Y.mean();
+    double mean_X = X.mean();
+    double mean_Y = Y.mean();
 
-    Eigen::VectorXf X_centered = X.array() - mean_X;
-    Eigen::VectorXf Y_centered = Y.array() - mean_Y;
+    Eigen::VectorXd X_centered = X.array() - mean_X;
+    Eigen::VectorXd Y_centered = Y.array() - mean_Y;
 
-    float covariance = (X_centered.dot(Y_centered)) / (X.size() - 1);  // Using (N-1) for sample covariance
-    float stddev_X = std::sqrt(X_centered.squaredNorm() / (X.size() - 1));
-    float stddev_Y = std::sqrt(Y_centered.squaredNorm() / (Y.size() - 1));
+    double covariance = (X_centered.dot(Y_centered)) / (X.size() - 1);  // Using (N-1) for sample covariance
+    double stddev_X = std::sqrt(X_centered.squaredNorm() / (X.size() - 1));
+    double stddev_Y = std::sqrt(Y_centered.squaredNorm() / (Y.size() - 1));
 
+    if (stddev_X == 0 || stddev_Y == 0) return 0; // Avoid division by zero
+    
     return covariance / (stddev_X * stddev_Y);
 }
 
-std::vector<float> flattenAndRemoveNAN(const std::vector<std::vector<float>>& matrix) {
-    std::vector<float> out;
+
+template <typename T>
+std::vector<double> flattenAndRemoveNAN(const std::vector<std::vector<T>>& matrix) {
+    std::vector<double> out;
     for (const auto& row : matrix) {
         for (const auto& val : row) {
-            if (!std::isnan(val)) {
-                out.push_back(val);
+            if (!std::isnan(static_cast<double>(val))) {
+                out.push_back(static_cast<double>(val));
             }
         }
     }
     return out;
 }
 
-
-std::vector<double> to_double_vector(const std::vector<float>& v) {
-    return std::vector<double>(v.begin(), v.end());
+template <typename T>
+std::vector<std::vector<double>> to_double_vector(const std::vector<std::vector<T>>& v) {
+    std::vector<std::vector<double>> result;
+    result.reserve(v.size());
+    for (const auto& row : v) {
+        std::vector<double> new_row;
+        new_row.reserve(row.size());
+        for (const T& val : row) {
+            new_row.push_back(static_cast<double>(val));
+        }
+        result.push_back(std::move(new_row));
+    }
+    return result;
 }
 
-#ifdef _HAS_MATPLOT_
-void plotScatter(const std::vector<double>& x, const std::vector<double>& y, const std::string& xlabel, const std::string& ylabel, const std::string& title) {
-    using namespace matplot;
-    auto fig = figure(true);
-     fig->size(1200, 800);
-    auto ax = fig->add_axes();
-    ax->scatter(x, y);
-    ax->title(title);
-    ax->xlabel(xlabel);
-    ax->ylabel(ylabel);
-    ax->grid(true);
-    fig->draw();
+#ifdef _HAS_MATPLOTLIB_
+
+#include <Python.h>
+
+std::string vectorToPythonList(const std::vector<double>& v) {
+    std::ostringstream oss;
+    oss << "[";
+    for (size_t i = 0; i < v.size(); ++i) {
+        oss << v[i];
+        if (i + 1 < v.size()) oss << ",";
+    }
+    oss << "]";
+    return oss.str();
 }
 
-void plotDistancesSideBySide(const std::vector<float>& hau, const std::vector<float>& mdf, const std::vector<float>& enc1, const std::vector<float>& enc2, const std::vector<float>& edh, const std::vector<float>& edm) {
-    // Convert float vectors to double vectors
-    std::vector<double> hau_double  = to_double_vector(hau);
-    std::vector<double> mdf_double  = to_double_vector(mdf);
-    std::vector<double> enc1_double = to_double_vector(enc1);
-    std::vector<double> enc2_double = to_double_vector(enc2);
-    std::vector<double> edh_double  = to_double_vector(edh);
-    std::vector<double> edm_double  = to_double_vector(edm);
+void plotScatter(const std::vector<double>& x,
+                 const std::vector<double>& y,
+                 const std::string& xlabel,
+                 const std::string& ylabel,
+                 const std::string& title)
+{
+    // Initialize Python if not already done
+    if (!Py_IsInitialized())
+        Py_Initialize();
 
-    plotScatter(hau_double,  enc1_double, "Hausdorff distance", "1-sided Euc. dist in latent space", "Hausdorff vs. 1-sided Euc. in Latent, r="+ to_string_with_precision(correlation_coefficient(hau,enc1),6));
-    plotScatter(mdf_double,  enc1_double, "MDF distance", "1-sided Euc. dist in latent space", "MDF vs. 1-sided Euc. in Latent, r="+ to_string_with_precision(correlation_coefficient(mdf,enc1),6));
-    plotScatter(hau_double,  mdf_double,  "Hausdorff distance", "MDF distance", "Hausdorff vs. MDF, r="+ to_string_with_precision(correlation_coefficient(hau,mdf),6));
-    plotScatter(enc1_double, enc2_double, "1-sided Euc. dist in latent space", "2-sided Euc. dist in latent space", "1-sided vs. 2-sided Euc. in Latent, r="+ to_string_with_precision(correlation_coefficient(enc1,enc2),6));
-    plotScatter(edh_double,  edm_double,  "Hausdorff distance between input and reconstructed", "MDF distance between input and reconstructed", "Auto-encoder error, hau="+ to_string_with_precision(vectorToEigen(edh).mean(),4)+" mm, mdf="+to_string_with_precision(vectorToEigen(edm).mean(),4)+" mm");
+    // Build Python code that creates a figure and draws it WITHOUT blocking
+    std::ostringstream code;
+    code << "import matplotlib.pyplot as plt\n"
+         << "import numpy as np\n"
+         << "plt.ion()\n"  // interactive mode on
+         << "x = np.array(" << vectorToPythonList(x) << ")\n"
+         << "y = np.array(" << vectorToPythonList(y) << ")\n"
+         << "fig = plt.figure(figsize=(12, 8))\n"
+         << "ax = fig.add_subplot(1,1,1)\n"
+         << "ax.scatter(x, y, s=20)\n"
+         << "ax.set_xlabel('" << xlabel << "')\n"
+         << "ax.set_ylabel('" << ylabel << "')\n"
+         << "ax.set_title('" << title << "')\n"
+         << "ax.grid(True)\n"
+         << "fig.canvas.draw()\n"
+         << "plt.pause(0.001)\n"; // allow GUI event loop to process and show the figure
+
+    PyRun_SimpleString(code.str().c_str());
 }
+
+void plotDistancesSideBySide(const std::vector<double>& hau,
+                             const std::vector<double>& mdf,
+                             const std::vector<double>& enc1,
+                             const std::vector<double>& enc2,
+                             const std::vector<double>& edh,
+                             const std::vector<double>& edm)
+{
+    // create all figures non-blocking
+    plotScatter(hau, enc1, "Hausdorff distance", "1-sided Euc. dist in latent space",
+        "Hausdorff vs. 1-sided Euc. in Latent, r=" + to_string_with_precision(correlation_coefficient(hau, enc1), 6));
+
+    plotScatter(mdf, enc1, "MDF distance", "1-sided Euc. dist in latent space",
+        "MDF vs. 1-sided Euc. in Latent, r=" + to_string_with_precision(correlation_coefficient(mdf, enc1), 6));
+
+    plotScatter(hau, mdf, "Hausdorff distance", "MDF distance",
+        "Hausdorff vs. MDF, r=" + to_string_with_precision(correlation_coefficient(hau, mdf), 6));
+
+    plotScatter(enc1, enc2, "1-sided Euc. dist in latent space", "2-sided Euc. dist in latent space",
+        "1-sided vs. 2-sided Euc. in Latent, r=" + to_string_with_precision(correlation_coefficient(enc1, enc2), 6));
+
+    plotScatter(edh, edm, "Hausdorff distance between input and reconstructed", "MDF distance between input and reconstructed",
+        "Auto-encoder error, hau=" + to_string_with_precision(vectorToEigen(edh).mean(), 4) + " mm, mdf=" + to_string_with_precision(vectorToEigen(edm).mean(), 4) + " mm");
+
+    // Now call blocking show() once so all figures are visible simultaneously.
+    // This call blocks until all matplotlib windows are closed by the user.
+    if (!Py_IsInitialized())
+        Py_Initialize();
+
+    const char* show_code =
+        "import matplotlib.pyplot as plt\n"
+        "plt.ioff()\n"   // optional: turn interactive mode off before blocking show
+        "plt.show()\n";
+
+    PyRun_SimpleString(show_code);
+}
+
 #endif
  
 void run_modelTest()
@@ -114,23 +175,50 @@ void run_modelTest()
     if (!model.isReady()) return;
 
     // Prepare tractogram
-    NIBR::TractogramReader tractogram(inp_path);
-    std::vector<std::vector<std::vector<float>>> streamlines = resampleTractogram_withStepCount(&tractogram, model.inpDim);
+    NIBR::TractogramReader tractogram(inp_path, false);
+
+    if(!tractogram.isReady()){
+        disp(MSG_ERROR, "Failed opening tractogram.");
+        return;
+    }
+
+    NIBR::Tractogram tracObj = tractogram.getTractogram();
 
 
-    // Encode streamlines in latent space
-    auto enc_streamlines = encodeStreamlines(streamlines,     model, batchSize);
+    // Original input streamline
+    NIBR::StreamlineBatch  streamlines = resampleTractogram_withStepCount(tracObj, model.inpDim);
 
-    // Decode the encoded streamlines
-    auto dec_streamlines = decodeStreamlines(enc_streamlines, model, batchSize);
+    disp(MSG_DETAIL,"Resampled streamlines for %d points.", model.inpDim);
+
+    // Latent space representations
+    std::vector<std::vector<double>>              enc_streamlines;
+
+    // Decoded streamlines from the latent space representations
+    NIBR::StreamlineBatch  dec_streamlines;
+
+    auto run_test_with_type = [&](auto type_placeholder) {
+        using T = decltype(type_placeholder);
+        auto lat_streamlines = encodeStreamlines<T>(streamlines,model,batchSize);         // Encode streamlines in latent space
+        dec_streamlines      = decodeStreamlines<T>(lat_streamlines, model, batchSize);   // Decode the encoded streamlines
+        enc_streamlines      =  to_double_vector<T>(lat_streamlines);                     // Convert latent space representation to double type for analysis
+        // disp(MSG_INFO,"Encoding completed.");
+    };
+     
+    // Dispatch to the generic lambda with the correct type
+    if (model.dtype == torch::kFloat)       { run_test_with_type(float{});   } 
+    else if (model.dtype == torch::kDouble) { run_test_with_type(double{});  } 
+    else if (model.dtype == torch::kHalf)   { run_test_with_type(at::Half{});} 
+    else { disp(MSG_ERROR, "Unsupported data type for modelTest: %s", c10::toString(model.dtype)); }
+
+    // return;
 
     // Define one-sided and two-sided distance functions in the latent space
-    auto getOneSidedEncodedDistance = [&](size_t idx1, size_t idx2) -> float {
-        float sum1 = 0;
-        float sum2 = 0;
+    auto getOneSidedEncodedDistance = [&](size_t idx1, size_t idx2) -> double {
+        double sum1 = 0;
+        double sum2 = 0;
         for (int i = 0; i < model.latDim; i++) {
-            float d1 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][i]);
-            float d2 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][i+model.latDim]);
+            double d1 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][i]);
+            double d2 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][i+model.latDim]);
             sum1   += d1 * d1;
             sum2   += d2 * d2;
         }
@@ -138,20 +226,20 @@ void run_modelTest()
         return std::min(std::sqrt(sum2), std::sqrt(sum1));
     };
 
-    auto getTwoSidedEncodedDistance = [&](size_t idx1, size_t idx2) -> float {
-        float sum1 = 0;
-        float sum2 = 0;
-        float sum3 = 0;
-        float sum4 = 0;
+    auto getTwoSidedEncodedDistance = [&](size_t idx1, size_t idx2) -> double {
+        double sum1 = 0;
+        double sum2 = 0;
+        double sum3 = 0;
+        double sum4 = 0;
         for (int i = 0; i < model.latDim; i++) {
-            float d1 = (enc_streamlines[idx1][i]              - enc_streamlines[idx2][i]);
-            float d2 = (enc_streamlines[idx1][i]              - enc_streamlines[idx2][i+model.latDim]);
-            float d3 = (enc_streamlines[idx1][i+model.latDim] - enc_streamlines[idx2][i]);
-            float d4 = (enc_streamlines[idx1][i+model.latDim] - enc_streamlines[idx2][i+model.latDim]);
-            sum1   += d1 * d1;
-            sum2   += d2 * d2;
-            sum3   += d3 * d3;
-            sum4   += d4 * d4;
+            double d1 = (enc_streamlines[idx1][i]              - enc_streamlines[idx2][i]);
+            double d2 = (enc_streamlines[idx1][i]              - enc_streamlines[idx2][i+model.latDim]);
+            double d3 = (enc_streamlines[idx1][i+model.latDim] - enc_streamlines[idx2][i]);
+            double d4 = (enc_streamlines[idx1][i+model.latDim] - enc_streamlines[idx2][i+model.latDim]);
+            sum1     += d1 * d1;
+            sum2     += d2 * d2;
+            sum3     += d3 * d3;
+            sum4     += d4 * d4;
         }
 
         return std::min(std::sqrt(sum4), std::min(std::sqrt(sum3), std::min(std::sqrt(sum2), std::sqrt(sum1))));
@@ -159,12 +247,13 @@ void run_modelTest()
 
 
     // Compute pair-wise distances
-    std::vector<std::vector<float>> enc_dist1        (streamlines.size(), std::vector<float>(streamlines.size(),NAN));
-    std::vector<std::vector<float>> enc_dist2        (streamlines.size(), std::vector<float>(streamlines.size(),NAN));
-    std::vector<std::vector<float>> hau_dist         (streamlines.size(), std::vector<float>(streamlines.size(),NAN));
-    std::vector<std::vector<float>> mdf_dist         (streamlines.size(), std::vector<float>(streamlines.size(),NAN));
-    std::vector<float> enc_dec_hau_dist (streamlines.size());
-    std::vector<float> enc_dec_mdf_dist (streamlines.size());
+    std::vector<std::vector<double>> enc_dist1        (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
+    std::vector<std::vector<double>> enc_dist2        (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
+    std::vector<std::vector<double>> hau_dist         (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
+    std::vector<std::vector<double>> mdf_dist         (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
+
+    std::vector<double> enc_dec_hau_dist (streamlines.size());
+    std::vector<double> enc_dec_mdf_dist (streamlines.size());
 
     auto getDistances = [&](NIBR::MT::TASK task) -> void {
         for (size_t i = 0; i < task.no; i++) {
@@ -182,14 +271,9 @@ void run_modelTest()
     auto enc2 = flattenAndRemoveNAN(enc_dist2);
     auto hau  = flattenAndRemoveNAN(hau_dist );
     auto mdf  = flattenAndRemoveNAN(mdf_dist );
-    auto edh  = enc_dec_hau_dist;
-    auto edm  = enc_dec_mdf_dist;
 
-    #ifdef _HAS_MATPLOT_
-    plotDistancesSideBySide(hau, mdf, enc1, enc2, edh, edm);
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-    #endif
-   
+    auto edh  = enc_dec_hau_dist;
+    auto edm  = enc_dec_mdf_dist;  
     
     
     disp(MSG_INFO,"");
@@ -210,8 +294,8 @@ void run_modelTest()
 
     disp(MSG_INFO,"");
 
-    #ifdef _HAS_MATPLOT_
-    wait("Done ");
+    #ifdef _HAS_MATPLOTLIB_
+    plotDistancesSideBySide(hau, mdf, enc1, enc2, edh, edm);
     #endif
 
     return;
@@ -231,7 +315,7 @@ void modelTest(CLI::App* app)
     app->add_option("<input tractogram>",    inp_path,           "Input tractogram (.vtk, .tck)")
         ->required();
 
-    app->add_option("<model>",               inp_model_spec,     "Input model, specified with the path to the Torch script file, followed by the input dimensions and latent space dimensions. E.g. /model/test_model.pt 256 64")
+    app->add_option("<model>",               inp_model_spec,     "Input model, specified with the path to the Torch script file, followed by the input dimensions, latent space dimensions, data type (float or double), and distance scaling factor of the model. E.g. /model/test_model.pt 256 64 float 0.08. ")
         ->required();
 
     app->add_flag("--useCPU, -c",            useCPU,             "Use only CPU without checking any available GPUs.");

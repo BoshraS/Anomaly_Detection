@@ -10,7 +10,7 @@ model=../../models/conv_autoencoder_scripted.pt
 
 ${anomap} modelTest \
 ${inp} \
-${model} 256 64
+${model} 256 64 float
 
 
 
