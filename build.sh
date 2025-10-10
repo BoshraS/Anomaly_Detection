@@ -4,7 +4,7 @@ cmakeExe=cmake
 buildType=Release # Release or Debug
 buildDir=build
 buildShared=OFF
-enableMatplotlib=ON
+enableMatplotlib=ON # If enabled, make sure that your default Python environment has matplotlib installed
 
 # Path to CUDA and libtorch
 Torch_DIR="/opt/libtorch/share/cmake/Torch"
