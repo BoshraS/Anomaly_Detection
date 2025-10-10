@@ -1,10 +1,5 @@
 #include "cmd.h"
 
-
-#ifdef _HAS_MATPLOT_
-#include <matplot/matplot.h>
-#endif
-
 using namespace NIBR;
 
 namespace CMDARGS_MODELTEST {
@@ -80,27 +75,87 @@ std::vector<std::vector<double>> to_double_vector(const std::vector<std::vector<
     return result;
 }
 
-#ifdef _HAS_MATPLOT_
-void plotScatter(const std::vector<double>& x, const std::vector<double>& y, const std::string& xlabel, const std::string& ylabel, const std::string& title) {
-    using namespace matplot;
-    auto fig = figure(true);
-     fig->size(1200, 800);
-    auto ax = fig->add_axes();
-    ax->scatter(x, y);
-    ax->title(title);
-    ax->xlabel(xlabel);
-    ax->ylabel(ylabel);
-    ax->grid(true);
-    fig->draw();
+#ifdef _HAS_MATPLOTLIB_
+
+#include <Python.h>
+
+std::string vectorToPythonList(const std::vector<double>& v) {
+    std::ostringstream oss;
+    oss << "[";
+    for (size_t i = 0; i < v.size(); ++i) {
+        oss << v[i];
+        if (i + 1 < v.size()) oss << ",";
+    }
+    oss << "]";
+    return oss.str();
 }
 
-void plotDistancesSideBySide(const std::vector<double>& hau, const std::vector<double>& mdf, const std::vector<double>& enc1, const std::vector<double>& enc2, const std::vector<double>& edh, const std::vector<double>& edm) {
-    plotScatter(hau,  enc1, "Hausdorff distance", "1-sided Euc. dist in latent space", "Hausdorff vs. 1-sided Euc. in Latent, r="+ to_string_with_precision(correlation_coefficient(hau,enc1),6));
-    plotScatter(mdf,  enc1, "MDF distance", "1-sided Euc. dist in latent space", "MDF vs. 1-sided Euc. in Latent, r="+ to_string_with_precision(correlation_coefficient(mdf,enc1),6));
-    plotScatter(hau,  mdf,  "Hausdorff distance", "MDF distance", "Hausdorff vs. MDF, r="+ to_string_with_precision(correlation_coefficient(hau,mdf),6));
-    plotScatter(enc1, enc2, "1-sided Euc. dist in latent space", "2-sided Euc. dist in latent space", "1-sided vs. 2-sided Euc. in Latent, r="+ to_string_with_precision(correlation_coefficient(enc1,enc2),6));
-    plotScatter(edh,  edm,  "Hausdorff distance between input and reconstructed", "MDF distance between input and reconstructed", "Auto-encoder error, hau="+ to_string_with_precision(vectorToEigen(edh).mean(),4)+" mm, mdf="+to_string_with_precision(vectorToEigen(edm).mean(),4)+" mm");
+void plotScatter(const std::vector<double>& x,
+                 const std::vector<double>& y,
+                 const std::string& xlabel,
+                 const std::string& ylabel,
+                 const std::string& title)
+{
+    // Initialize Python if not already done
+    if (!Py_IsInitialized())
+        Py_Initialize();
+
+    // Build Python code that creates a figure and draws it WITHOUT blocking
+    std::ostringstream code;
+    code << "import matplotlib.pyplot as plt\n"
+         << "import numpy as np\n"
+         << "plt.ion()\n"  // interactive mode on
+         << "x = np.array(" << vectorToPythonList(x) << ")\n"
+         << "y = np.array(" << vectorToPythonList(y) << ")\n"
+         << "fig = plt.figure(figsize=(12, 8))\n"
+         << "ax = fig.add_subplot(1,1,1)\n"
+         << "ax.scatter(x, y, s=20)\n"
+         << "ax.set_xlabel('" << xlabel << "')\n"
+         << "ax.set_ylabel('" << ylabel << "')\n"
+         << "ax.set_title('" << title << "')\n"
+         << "ax.grid(True)\n"
+         << "fig.canvas.draw()\n"
+         << "plt.pause(0.001)\n"; // allow GUI event loop to process and show the figure
+
+    PyRun_SimpleString(code.str().c_str());
 }
+
+void plotDistancesSideBySide(const std::vector<double>& hau,
+                             const std::vector<double>& mdf,
+                             const std::vector<double>& enc1,
+                             const std::vector<double>& enc2,
+                             const std::vector<double>& edh,
+                             const std::vector<double>& edm)
+{
+    // create all figures non-blocking
+    plotScatter(hau, enc1, "Hausdorff distance", "1-sided Euc. dist in latent space",
+        "Hausdorff vs. 1-sided Euc. in Latent, r=" + to_string_with_precision(correlation_coefficient(hau, enc1), 6));
+
+    plotScatter(mdf, enc1, "MDF distance", "1-sided Euc. dist in latent space",
+        "MDF vs. 1-sided Euc. in Latent, r=" + to_string_with_precision(correlation_coefficient(mdf, enc1), 6));
+
+    plotScatter(hau, mdf, "Hausdorff distance", "MDF distance",
+        "Hausdorff vs. MDF, r=" + to_string_with_precision(correlation_coefficient(hau, mdf), 6));
+
+    plotScatter(enc1, enc2, "1-sided Euc. dist in latent space", "2-sided Euc. dist in latent space",
+        "1-sided vs. 2-sided Euc. in Latent, r=" + to_string_with_precision(correlation_coefficient(enc1, enc2), 6));
+
+    plotScatter(edh, edm, "Hausdorff distance between input and reconstructed", "MDF distance between input and reconstructed",
+        "Auto-encoder error, hau=" + to_string_with_precision(vectorToEigen(edh).mean(), 4) + " mm, mdf=" + to_string_with_precision(vectorToEigen(edm).mean(), 4) + " mm");
+
+    // Now call blocking show() once so all figures are visible simultaneously.
+    // This call blocks until all matplotlib windows are closed by the user.
+    if (!Py_IsInitialized())
+        Py_Initialize();
+
+    const char* show_code =
+        "import matplotlib.pyplot as plt\n"
+        "plt.ioff()\n"   // optional: turn interactive mode off before blocking show
+        "plt.show()\n";
+
+    PyRun_SimpleString(show_code);
+}
+
 #endif
  
 void run_modelTest()
@@ -218,13 +273,7 @@ void run_modelTest()
     auto mdf  = flattenAndRemoveNAN(mdf_dist );
 
     auto edh  = enc_dec_hau_dist;
-    auto edm  = enc_dec_mdf_dist;
-
-    #ifdef _HAS_MATPLOT_
-    plotDistancesSideBySide(hau, mdf, enc1, enc2, edh, edm);
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-    #endif
-   
+    auto edm  = enc_dec_mdf_dist;  
     
     
     disp(MSG_INFO,"");
@@ -245,8 +294,8 @@ void run_modelTest()
 
     disp(MSG_INFO,"");
 
-    #ifdef _HAS_MATPLOT_
-    wait("Done ");
+    #ifdef _HAS_MATPLOTLIB_
+    plotDistancesSideBySide(hau, mdf, enc1, enc2, edh, edm);
     #endif
 
     return;

@@ -1,6 +1,7 @@
 .vscode/
 .vs/
 .cache/
+prev/
 nibrary/
 build/
 build_*/

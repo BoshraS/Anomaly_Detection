@@ -28,20 +28,22 @@ if(OPENMP_FOUND)
 endif()
 
 find_package(Torch REQUIRED)
-find_package(Matplot++)
 
 # Set executable
 set(CMDNAME anomap)
 add_executable(${CMDNAME} ${CMAKE_SOURCE_DIR}/src/main.cpp ${SRCS})
 target_link_libraries(${CMDNAME} Nibrary geogram dcm2niix++ z ${TORCH_LIBRARIES})
-if(Matplot++_FOUND)
-   target_link_libraries(${CMDNAME} Matplot++::matplot)
-   add_definitions(-D_HAS_MATPLOT_) 
+
+if (ENABLE_MATPLOTLIB)
+    find_package(Python3 COMPONENTS Interpreter Development QUIET)
+    if (Python3_FOUND)
+        target_link_libraries(${CMDNAME} Python3::Python)
+        message(STATUS "Enabled matplotlib support. (Make sure your Python environment contains matplotlib.)")
+        add_definitions(-D_HAS_MATPLOTLIB_)
+    else()
+        message(STATUS "Python3 not found. Disabling matplotlib support.")
+    endif()
 endif()
-
-
-
-
 
 if(UNIX)
 
