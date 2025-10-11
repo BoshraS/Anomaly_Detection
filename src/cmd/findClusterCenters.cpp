@@ -9,17 +9,18 @@ namespace CMDARGS_FINDCLUSTERCENTERS {
     std::tuple<std::string, int, int, std::string, double> model_spec("", 0, 0, "", 1.0); // module_path, inp_dim, lat_dim, data type, distance scaler
 
     float  maxDist;
-    int    maxIteration     = 0;
+    int    maxIteration      = 0;
 
-    int    batchSize        = 1000000;
-    int    miniBatchSize    = 1000;
-    bool   randomize        = false;
-    bool   shuffle          = false;
-    bool   useCPU           = false;
+    int    batchSize         = 1000000;
+    int    miniBatchSize     = 1000;
+    bool   randomize         = false;
+    bool   shuffle           = false;
+    bool   useLeaderAlg      = false;
+    bool   useCPU            = false;
     
-    int numberOfThreads     =  0;
-    std::string verbose     = "info";
-    bool force              = false;
+    int numberOfThreads      =  0;
+    std::string verbose      = "info";
+    bool force               = false;
 }
 
 using namespace CMDARGS_FINDCLUSTERCENTERS;
@@ -222,6 +223,9 @@ void run_findClusterCenters()
 
     // Do the clustering
     std::vector<Eigen::VectorXf> clusterCenters;
+    std::vector<int>             clusterCounts;      // To store the count of streamlines in each cluster
+    std::mutex                   clusterUpdateMutex; // To safely update clusters from multiple threads
+
     
     // Build an empty KD-Tree
     PointCloud cloud;
@@ -260,157 +264,265 @@ void run_findClusterCenters()
 
         // Shuffle the batch if needed
         if (shuffle) std::shuffle(batch.begin(), batch.end(), rand.getGen());
+        
+        int unassignedCnt = 0;
+        std::vector<Eigen::VectorXf> localClusterCenters;
+        std::vector<int> newLocalCounts;
 
+        std::vector<std::atomic<bool>> unassigned(batch.size());
+        for (size_t i = 0; i < batch.size(); ++i) unassigned[i] = false;
 
         // Perform clustering operations on the batch
-        // This will be done in two steps
-        // Step 1. If a streamline is far from all existing cluster centers, keep it as "unassigned".
-        // Step 2. Within in batch, locally cluster all the "unassigned" streamlines, and form localClusterCenters.
-        // Step 3. Append localClusterCenters to clusterCenters
+        // This will be done in five steps
+        // STEP 1: If a streamline is far from all existing cluster centers, keep it as "unassigned". Otherwise, assign it to an existing cluster center.
+        // STEP 2: (Online k-means only) Update the main cluster centers by adding the contributions from the assigned streamlines in the previous step.
+        // STEP 3: Within the batch, locally cluster all the "unassigned" streamlines, and form localClusterCenters.
+        // STEP 4: Add the new clusters to the global list and update their counts
+        // STEP 5: Rebuild the KD-Tree with the updated and new centers
 
-        // For efficiency split the unassigned streamlines into smaller batches of:
-        // 10000 streamlines in the first iteration when there will be many new clusters,
-        // and 1000 streamlines in the other iteration when there will be many existing clusters, and less new clusters.
+        // Reusable lambda to run the leader algorithm on a set of indices
+        auto runLeaderOnUnassigned = [&](const std::vector<size_t>& indices) -> std::vector<Eigen::VectorXf> {
+            
+            int unaCnt = indices.size();
+            if (unaCnt == 0) return {};
 
-        std::vector<Eigen::VectorXf> localClusterCenters;       // New clusters found in this batch.
-        
-        // Build an empty KD-Tree for local clusters
-        PointCloud localCloud;
-        typedef nanoflann::KDTreeSingleIndexAdaptor<nanoflann::L2_Simple_Adaptor<float, PointCloud>,PointCloud,-1> KDTree;
-        KDTree localKdtree(model.latDim, localCloud, nanoflann::KDTreeSingleIndexAdaptorParams(10));
-        localKdtree.buildIndex();
+            disp(MSG_DETAIL, "Clustering %d streamlines with leader algorithm...", unaCnt);
 
-        std::vector<std::atomic<bool>> unassigned(batchSize);    // True if a streamline in the batch did not belong to any existing cluster
-        for (int i = 0; i < batchSize; ++i) unassigned[i] = false;
+            std::vector<Eigen::VectorXf> finalLeaders;
+            PointCloud localCloud;
+            KDTree localKdtree(model.latDim, localCloud, nanoflann::KDTreeSingleIndexAdaptorParams(10));
+            localKdtree.buildIndex();
 
-        std::vector<size_t> unaInd;                              // Indices of the streamlines, which did not belong to any existing cluster
-        std::vector<Eigen::VectorXf> unassignedClusterCenters;   // Clusters of the unassigned streamlines that were not clusered within a batch
-        size_t taskOffset = 0;
+            std::vector<Eigen::VectorXf> pendingLeaders;
+            size_t taskOffset = 0;
+            std::mutex mx;
 
-        auto addToGlobalCluster = [&](NIBR::MT::TASK task) -> void {
+            auto findAndAddLeader = [&](NIBR::MT::TASK task) -> void {
+                size_t rInd = indices[task.no + taskOffset];
 
-            if (!clusterCenters.empty()) {
-                size_t closestCenterIndex;
-                float  squaredDistToClosestClusterCenter;
+                // Check against already merged leaders from previous chunks
+                if (!finalLeaders.empty()) {
+                    size_t closestCenterIndex = 0;
+                    float  squaredDist;
 
-                nanoflann::KNNResultSet<float> resultSet1(1);
-                resultSet1.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
-                kdtree.findNeighbors(resultSet1, batch[task.no].data(),             nanoflann::SearchParameters());
-                if (squaredDistToClosestClusterCenter < adjMaxDist) return;
+                    nanoflann::KNNResultSet<float> resultSet1(1);
+                    resultSet1.init(&closestCenterIndex, &squaredDist);
+                    localKdtree.findNeighbors(resultSet1, batch[rInd].data(), nanoflann::SearchParameters());
+                    if (squaredDist < adjMaxDist) return;
 
-                nanoflann::KNNResultSet<float> resultSet2(1);
-                resultSet2.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
-                kdtree.findNeighbors(resultSet2, batch[task.no].data()+model.latDim, nanoflann::SearchParameters());
-                if (squaredDistToClosestClusterCenter < adjMaxDist) return;
-            }
+                    nanoflann::KNNResultSet<float> resultSet2(1);
+                    resultSet2.init(&closestCenterIndex, &squaredDist);
+                    localKdtree.findNeighbors(resultSet2, batch[rInd].data() + model.latDim, nanoflann::SearchParameters());
+                    if (squaredDist < adjMaxDist) return;
+                }
 
-            unassigned[task.no].store(true);
-
-        };
-
-        std::mutex mx;
-
-        auto addToLocalCluster = [&](NIBR::MT::TASK task) -> void {
-
-            size_t rInd = unaInd[task.no+taskOffset];
-
-            if (!localClusterCenters.empty()) {
-                size_t closestCenterIndex;
-                float  squaredDistToClosestClusterCenter;
-
-                nanoflann::KNNResultSet<float> resultSet1(1);
-                resultSet1.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
-                localKdtree.findNeighbors(resultSet1, batch[rInd].data(),    nanoflann::SearchParameters());
-                if (squaredDistToClosestClusterCenter < adjMaxDist) return;
-
-                nanoflann::KNNResultSet<float> resultSet2(1);
-                resultSet2.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
-                localKdtree.findNeighbors(resultSet2, batch[rInd].data()+model.latDim, nanoflann::SearchParameters());
-                if (squaredDistToClosestClusterCenter < adjMaxDist) return;
-            }
-
-            {
+                // Lock and check against pending leaders from the current chunk
                 mx.lock();
-
-                for (size_t ind = 0; ind < unassignedClusterCenters.size(); ind++) {
-
-                    float sum1 = 0;
-                    float sum2 = 0;
-
+                for (const auto& center : pendingLeaders) {
+                    float sum1 = 0, sum2 = 0;
                     for (int i = 0; i < model.latDim; i++) {
-                        float d1 = (batch[rInd][i] - unassignedClusterCenters[ind][i]);
-                        float d2 = (batch[rInd][i] - unassignedClusterCenters[ind][i + model.latDim]);
-                        sum1    += d1 * d1;
-                        sum2    += d2 * d2;
+                        float d1 = (batch[rInd][i] - center[i]);
+                        float d2 = (batch[rInd][i] - center[i + model.latDim]);
+                        sum1 += d1 * d1;
+                        sum2 += d2 * d2;
                     }
-
-                    if (std::min(sum1,sum2) < adjMaxDist) {
+                    if (std::min(sum1, sum2) < adjMaxDist) {
                         mx.unlock();
                         return;
                     }
                 }
-
-                unassignedClusterCenters.push_back(batch[rInd]);
+                pendingLeaders.push_back(batch[rInd]);
                 mx.unlock();
-                return;                
-            }   
-
-        };
-
-
-        // Add the newly found localClusterCenters in the global clusterCenters
-        auto doUnassigned = [&]() -> int {
-
-            unaInd.clear();
-
-            for (size_t r = 0; r < unassigned.size(); r++) {
-                if (unassigned[r]) unaInd.push_back(r);
-            }
-            int unaCnt     = unaInd.size();
+            };
 
             int splitSize;
             if      (unaCnt <= 100000)  splitSize = 1000;
             else if (unaCnt <= 1000000) splitSize = 10000;
             else                        splitSize = 100000;
 
-            taskOffset     = 0;
-            int begInd     = 0;
-            int endInd     = 0;
-            int splitCnt   = (unaCnt / splitSize < 1) ? unaCnt : unaCnt/splitSize;
-            int curSplitNo = 0;
-            std::string preamble = "\033[1;32mNIBRARY::INFO: \033[0;32m";
-            if (NIBR::VERBOSE()>=VERBOSE_INFO) {std::cout << preamble << "Clustering unassigned streamlines " << ": 0%" << "\033[0m" << '\r' << std::flush;}
-            float progressScaler = 100.0f/float(splitCnt);                
+            int begInd = 0;
+            int endInd = 0;
             while (endInd != unaCnt) {
                 begInd = endInd;
                 endInd = ((begInd + splitSize) <= unaCnt) ? (begInd + splitSize) : unaCnt;
                 int curSplitSize = endInd - begInd;
-                NIBR::MT::MTRUN(curSplitSize, addToLocalCluster);
-                localClusterCenters.insert(localClusterCenters.end(), unassignedClusterCenters.begin(), unassignedClusterCenters.end());
-                localCloud.points = localClusterCenters;
+                taskOffset = begInd;
+                NIBR::MT::MTRUN(curSplitSize, "Finding chunk leaders", findAndAddLeader);
+                finalLeaders.insert(finalLeaders.end(), pendingLeaders.begin(), pendingLeaders.end());
+                localCloud.points = finalLeaders;
                 localKdtree.buildIndex();
-                unassignedClusterCenters.clear();
-                taskOffset += curSplitSize;
-                if (NIBR::VERBOSE()>=VERBOSE_INFO) {std::cout << "\r\033[K" << std::flush;}
-                if (NIBR::VERBOSE()>=VERBOSE_INFO) {std::cout << preamble << "Clustering unassigned streamlines: " << std::fixed << std::setprecision(2) << (++curSplitNo)*progressScaler << "%" << "\033[0m" << std::flush;}
+                pendingLeaders.clear();
             }
-            if (NIBR::VERBOSE()>=VERBOSE_INFO) {std::cout << "\r\033[K" << preamble << "Clustering unassigned streamlines: 100%" << std::endl;}
 
-            return unaCnt;
+            return finalLeaders;
+        };
 
-        }; 
+        //====
 
-        
-        // Assign streamlines into existing clusters, and find "unassigned" streamlines, which were not assinged to any cluster
-        NIBR::MT::MTRUN( batchSize, "Assigning clusters " + to_string_with_precision(iter+1,0) + " / " + to_string_with_precision(maxIteration,0), addToGlobalCluster);
+        if (!useLeaderAlg) {
+            
+            // ONLINE K-MEANS ALGORITHM
 
-        // Find localClusterCenters that are the cluster centers of the "unassigned" streamlines, 
-        int unassignedCnt = doUnassigned();
+            // STEP 1: Assign streamlines to existing clusters or mark them unassigned
+            std::vector<Eigen::VectorXf> batch_clusterUpdates;
+            std::vector<int>             batch_clusterCounts;
+            if (!clusterCenters.empty()) {
+                batch_clusterUpdates.resize(clusterCenters.size(), Eigen::VectorXf::Zero(2 * model.latDim));
+                batch_clusterCounts.resize(clusterCenters.size(), 0);
+            }
 
-        // Append the localClusterCenters to global clusterCenters
+            auto findClosestAndUpdate = [&](NIBR::MT::TASK task) -> void {
+                if (clusterCenters.empty()) {
+                    unassigned[task.no].store(true);
+                    return;
+                }
+                
+                size_t closestCenterIndex = 0;
+                float  minSquaredDist     = std::numeric_limits<float>::max();
+                nanoflann::KNNResultSet<float> resultSet(1);
+                size_t tempIndex;
+                float  tempDist;
+
+                resultSet.init(&tempIndex, &tempDist);
+                kdtree.findNeighbors(resultSet, batch[task.no].data(), nanoflann::SearchParameters());
+                if (tempDist < minSquaredDist) {
+                    minSquaredDist      = tempDist;
+                    closestCenterIndex  = tempIndex;
+                }
+
+                resultSet.init(&tempIndex, &tempDist);
+                kdtree.findNeighbors(resultSet, batch[task.no].data() + model.latDim, nanoflann::SearchParameters());
+                if (tempDist < minSquaredDist) {
+                    minSquaredDist      = tempDist;
+                    closestCenterIndex  = tempIndex;
+                }
+
+                if (minSquaredDist < adjMaxDist) {
+                    std::lock_guard<std::mutex> lock(clusterUpdateMutex);
+                    batch_clusterUpdates[closestCenterIndex] += batch[task.no];
+                    batch_clusterCounts[closestCenterIndex]++;
+                } else {
+                    unassigned[task.no].store(true);
+                }
+            };
+            NIBR::MT::MTRUN( batch.size(), "Assigning clusters " + to_string_with_precision(iter+1,0) + " / " + to_string_with_precision(maxIteration,0), findClosestAndUpdate);
+
+            // STEP 2: Apply the collected updates to the main cluster centers
+            disp(MSG_DETAIL, "Applying batch updates to cluster centers...");
+            for (size_t i = 0; i < clusterCenters.size(); ++i) {
+                if (batch_clusterCounts[i] > 0) {
+                    clusterCenters[i] = (clusterCenters[i] * clusterCounts[i] + batch_clusterUpdates[i]) / (clusterCounts[i] + batch_clusterCounts[i]);
+                    clusterCounts[i] += batch_clusterCounts[i];
+                }
+            }
+            disp(MSG_DETAIL, "Done applying updates.");
+            
+            // STEP 3: Cluster the unassigned streamlines to form new centers
+            std::vector<size_t> unaInd;
+            for (size_t r = 0; r < unassigned.size(); r++) {
+                if (unassigned[r]) unaInd.push_back(r);
+            }
+            unassignedCnt = unaInd.size();
+
+            disp(MSG_DETAIL, "%d are outside of existing cluster reach.",unassignedCnt);
+
+            if (unassignedCnt > 0) {
+                
+                // Pass 1: Find initial leaders using the reusable leader algorithm function
+                localClusterCenters = runLeaderOnUnassigned(unaInd);
+                disp(MSG_DETAIL, "Found %d local leaders after merging.", localClusterCenters.size());
+
+                // Pass 2: Assign all unassigned streamlines to the nearest leader and compute the average.
+                if (!localClusterCenters.empty()) {
+
+                    disp(MSG_DETAIL, "Pass 2: Assigning streamlines to leaders and averaging...");
+                    newLocalCounts.assign(localClusterCenters.size(), 0);
+                    std::vector<Eigen::VectorXf> localClusterUpdates(localClusterCenters.size(), Eigen::VectorXf::Zero(2 * model.latDim));
+
+                    PointCloud localCloud;
+                    localCloud.points = localClusterCenters;
+                    KDTree localKdtree(model.latDim, localCloud, nanoflann::KDTreeSingleIndexAdaptorParams(10));
+                    localKdtree.buildIndex();
+                    std::mutex assignMutex;
+
+                    auto assignToLeaders = [&](NIBR::MT::TASK task) -> void {
+                        size_t rInd                 = unaInd[task.no];
+                        size_t closestCenterIndex   = 0; 
+                        float  minSquaredDist       = std::numeric_limits<float>::max();
+                        
+                        nanoflann::KNNResultSet<float> resultSet(1);
+                        size_t tempIndex; 
+                        float tempDist;
+                        resultSet.init(&tempIndex, &tempDist);
+                        localKdtree.findNeighbors(resultSet, batch[rInd].data(), nanoflann::SearchParameters());
+                        minSquaredDist      = tempDist; 
+                        closestCenterIndex  = tempIndex;
+                        
+                        resultSet.init(&tempIndex, &tempDist);
+                        localKdtree.findNeighbors(resultSet, batch[rInd].data() + model.latDim, nanoflann::SearchParameters());
+
+                        if (tempDist < minSquaredDist) { closestCenterIndex = tempIndex; }
+                        
+                        std::lock_guard<std::mutex> lock(assignMutex);
+                        localClusterUpdates[closestCenterIndex] += batch[rInd];
+                        newLocalCounts[closestCenterIndex]++;
+                    };
+                    NIBR::MT::MTRUN(unassignedCnt, "Assigning to leaders", assignToLeaders);
+
+                    for (size_t i = 0; i < localClusterCenters.size(); ++i) {
+                        if (newLocalCounts[i] > 0) {
+                            localClusterCenters[i] = localClusterUpdates[i] / newLocalCounts[i];
+                        }
+                    }
+                    disp(MSG_DETAIL, "Done averaging local clusters.");
+                }
+            }
+
+        } else {
+
+            // LEADER ALGORITHM
+            
+            // STEP 1: Assign streamlines to existing clusters or mark them unassigned
+            auto addToGlobalCluster = [&](NIBR::MT::TASK task) -> void {
+                if (!clusterCenters.empty()) {
+                    size_t closestCenterIndex = 0;
+                    float  squaredDistToClosestClusterCenter;
+                    nanoflann::KNNResultSet<float> resultSet1(1);
+                    resultSet1.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
+                    kdtree.findNeighbors(resultSet1, batch[task.no].data(),             nanoflann::SearchParameters());
+                    if (squaredDistToClosestClusterCenter < adjMaxDist) return;
+                    nanoflann::KNNResultSet<float> resultSet2(1);
+                    resultSet2.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
+                    kdtree.findNeighbors(resultSet2, batch[task.no].data()+model.latDim, nanoflann::SearchParameters());
+                    if (squaredDistToClosestClusterCenter < adjMaxDist) return;
+                }
+                unassigned[task.no].store(true);
+            };
+            NIBR::MT::MTRUN( batch.size(), "Assigning clusters " + to_string_with_precision(iter+1,0) + " / " + to_string_with_precision(maxIteration,0), addToGlobalCluster);
+
+            // STEP 2: Main cluster centers are not updated in the leader algorithm
+            
+            // STEP 3: Within the batch, locally cluster all the "unassigned" streamlines using the reusable leader algorithm function.
+            std::vector<size_t> unaInd;
+            for (size_t r = 0; r < unassigned.size(); r++) {
+                if (unassigned[r]) unaInd.push_back(r);
+            }
+            unassignedCnt = unaInd.size();
+            
+            if (unassignedCnt > 0) {
+                localClusterCenters = runLeaderOnUnassigned(unaInd);
+            }
+        }
+
+        // STEP 4: Add the new clusters to the global list and update their counts
         clusterCenters.insert(clusterCenters.end(), localClusterCenters.begin(), localClusterCenters.end());
-        
-        // Update the global KD-tree
+        if (!useLeaderAlg) {
+            clusterCounts.insert(clusterCounts.end(), newLocalCounts.begin(), newLocalCounts.end());    // Use the real counts
+        } else {
+            clusterCounts.insert(clusterCounts.end(), localClusterCenters.size(), 1);                   // Each new leader has a count of 1
+        }
+
+        // STEP 5: Rebuild the KD-Tree with the updated and new centers
         cloud.points = clusterCenters;
         kdtree.buildIndex();
 
@@ -466,6 +578,7 @@ void findClusterCenters(CLI::App* app)
     
     app->add_option("--batchSize, -b",       batchSize,          "Batch size. Number of streamlines to process at each iteration. Default: 1000000");
     app->add_flag("--shuffle, -s",           shuffle,            "Shuffles streamlines within batches that leads to different cluster centers at each run.");
+    app->add_flag("--useLeaderAlg, -l",      useLeaderAlg,       "Uses the leader algorithm for clustering instead of the default online k-means approach. Default: OFF.");
     
     app->add_flag("--randomize, -r",         randomize,          "Cluster using randomized batches instead of the default, regularly fetched, batches.");
     app->add_option("--miniBatchSize",       miniBatchSize,      "When using random batches, each batch is split into mini batches fetched contigously from a single file, miniBatchSize sets that value. Default: 1000");

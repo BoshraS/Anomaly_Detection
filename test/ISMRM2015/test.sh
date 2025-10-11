@@ -17,7 +17,8 @@ ${inp}_dec.vtk
 ${anomap} findClusterCenters -f \
 ${inp}.bin \
 ${inp}.clc \
---maxDist 1
+--maxDist 1 \
+-v detail
 
 ${anomap} decode -f \
 ${inp}.clc \
