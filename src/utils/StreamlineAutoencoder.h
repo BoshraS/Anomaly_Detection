@@ -2,6 +2,7 @@
 #include "base/multithreader.h"
 #include "nanoflann.hpp"
 #include <Eigen/Dense>
+#include <string>
 
 
 class StreamlineAutoencoder {
@@ -68,6 +69,36 @@ std::vector<T> flatten_and_flip_streamlines(const NIBR::Tractogram& streamlines)
             for (int k = points_per_streamline - 1; k != -1; --k) {
                 flattened[index++] = static_cast<T>(streamlines[i][k][j]);
             }
+        }
+    }
+    return flattened;
+}
+
+template <typename T>
+std::vector<T> flatten_and_flip_streamlines_in_order(const NIBR::Tractogram& streamlines) {
+    
+    if (streamlines.empty()) return {};
+
+    size_t number_of_streamlines = streamlines.size();
+    size_t points_per_streamline = streamlines[0].size(); // Assumes all are resampled to the same size
+
+    std::vector<T> flattened(2 * number_of_streamlines * 3 * points_per_streamline);
+    size_t index = 0;
+
+    for (size_t i = 0; i < number_of_streamlines; ++i) {
+
+        // original
+        for (size_t k = 0; k < points_per_streamline; ++k) {
+            flattened[index++] = static_cast<T>(streamlines[i][k][0]); // x
+            flattened[index++] = static_cast<T>(streamlines[i][k][1]); // y
+            flattened[index++] = static_cast<T>(streamlines[i][k][2]); // z
+        }
+
+        // flipped
+        for (int k = static_cast<int>(points_per_streamline) - 1; k >= 0; --k) {
+            flattened[index++] = static_cast<T>(streamlines[i][k][0]);
+            flattened[index++] = static_cast<T>(streamlines[i][k][1]);
+            flattened[index++] = static_cast<T>(streamlines[i][k][2]);
         }
     }
     return flattened;

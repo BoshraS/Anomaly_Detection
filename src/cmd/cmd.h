@@ -23,3 +23,5 @@ void findClusterCenters_latentBrute(CLI::App* app);
 void compareDistance(CLI::App* app);
 
 void kmeans_euclidean(CLI::App* app);
+
+void checkFlipping(CLI::App* app);

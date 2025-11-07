@@ -1,5 +1,7 @@
 #include "base/verbose.h"
 #include "cmd.h"
+#include "dMRI/tractography/io/tractogramReader.h"
+#include "dMRI/tractography/io/tractogramWriter.h"
 #include "dMRI/tractography/tractogram.h"
 #include <ATen/core/Dimname.h>
 #include <utils/clusterHelpers.h>
@@ -73,8 +75,10 @@ void run_score_euc()
     // Check input/output
     if (!parseForceOutput(out_path,force)) return;
 
-    if (getFileExtension(clc_path) != "clce") {
-        disp(MSG_ERROR,"Input cluster centers must have .clce extension.");
+    auto clc_path_extension = getFileExtension(clc_path);
+
+    if (clc_path_extension != "clce" && clc_path_extension != "vtk") {
+        disp(MSG_ERROR,"Input cluster centers must have .clce or .vtk extension.");
         return;
     }
 
@@ -93,7 +97,13 @@ void run_score_euc()
 
     int N = tractogram.numberOfStreamlines;
 
-    auto clusterCenters = readClusterCentersEuclidean(clc_path, points_per_streamline, limit_centers);
+    std::vector<NIBR::Streamline> clusterCenters;
+    if(clc_path_extension == "clce")
+        clusterCenters = readClusterCentersEuclidean(clc_path, points_per_streamline, limit_centers);
+    else {
+        auto reader = NIBR::TractogramReader(clc_path);
+        clusterCenters = reader.getTractogram();
+    }
 
     // Compute batch count
     int batchCnt = (N < batchSize) ? 1 : (N + batchSize - 1) / batchSize;

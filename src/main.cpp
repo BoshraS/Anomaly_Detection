@@ -32,6 +32,7 @@ int main(int argc, char *argv[]) {
     compareSpeed(app.add_subcommand("compareSpeed", ""));
     compareDistance(app.add_subcommand("compareDistance", ""));
     kmeans_euclidean(app.add_subcommand("kmeansEuclidean", ""));
+    checkFlipping(app.add_subcommand("checkFlipping", ""));
 
     disp(MSG_DEBUG, "Parsing input");
 
