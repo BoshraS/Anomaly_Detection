@@ -12,7 +12,7 @@ Step 3. Run the `build.sh` script
 
 #### Dependencies
 - [Nibrary](https://github.com/nibrary/nibrary)
-    - Tested with [v0.4.2](https://github.com/nibrary/nibrary/tree/v0.4.2)
+    - Tested with [v0.4.4](https://github.com/nibrary/nibrary/tree/v0.4.4)
 - [LibTorch](https://pytorch.org/)
     - If CUDA version is installed, GPU acceleration will be used.
     - Make sure to install the cxx11 ABI version of LibTorch!
