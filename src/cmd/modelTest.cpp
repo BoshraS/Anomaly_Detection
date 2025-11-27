@@ -13,6 +13,7 @@ namespace CMDARGS_MODELTEST {
     int numberOfThreads     =  0;
     std::string verbose     = "info";
     bool force              = false;
+    std::string model_type  = "";
 }
 
 using namespace CMDARGS_MODELTEST; 
@@ -212,6 +213,11 @@ void run_modelTest()
 
     // return;
 
+    int real_lat_dim = model.latDim;
+    if (model_type != "") {
+        real_lat_dim = std::floor(model.latDim / 2);
+    }
+
     // Define one-sided and two-sided distance functions in the latent space
     auto getOneSidedEncodedDistance = [&](size_t idx1, size_t idx2) -> double {
         double sum1 = 0;
@@ -219,6 +225,19 @@ void run_modelTest()
         for (int i = 0; i < model.latDim; i++) {
             double d1 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][i]);
             double d2 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][i+model.latDim]);
+            sum1   += d1 * d1;
+            sum2   += d2 * d2;
+        }
+
+        return std::min(std::sqrt(sum2), std::sqrt(sum1));
+    };
+
+    auto getOneSidedEncodedDistance_newgen = [&](size_t idx1, size_t idx2) -> double {
+        double sum1 = 0;
+        double sum2 = 0;
+        for (int i = 0; i < real_lat_dim; i++) {
+            double d1 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][i]);
+            double d2 = (enc_streamlines[idx1][i] - enc_streamlines[idx2][real_lat_dim-i-1]);
             sum1   += d1 * d1;
             sum2   += d2 * d2;
         }
@@ -245,6 +264,25 @@ void run_modelTest()
         return std::min(std::sqrt(sum4), std::min(std::sqrt(sum3), std::min(std::sqrt(sum2), std::sqrt(sum1))));
     };
 
+    auto getTwoSidedEncodedDistance_newgen = [&](size_t idx1, size_t idx2) -> double {
+        double sum1 = 0;
+        double sum2 = 0;
+        double sum3 = 0;
+        double sum4 = 0;
+        for (int i = 0; i < real_lat_dim; i++) {
+            double d1 = (enc_streamlines[idx1][i]              - enc_streamlines[idx2][i]);
+            double d2 = (enc_streamlines[idx1][i]              - enc_streamlines[idx2][real_lat_dim-i-1]);
+            double d3 = (enc_streamlines[idx1][real_lat_dim-i-1] - enc_streamlines[idx2][i]);
+            double d4 = (enc_streamlines[idx1][real_lat_dim-i-1] - enc_streamlines[idx2][real_lat_dim-i-1]);
+            sum1     += d1 * d1;
+            sum2     += d2 * d2;
+            sum3     += d3 * d3;
+            sum4     += d4 * d4;
+        }
+
+        return std::min(std::sqrt(sum4), std::min(std::sqrt(sum3), std::min(std::sqrt(sum2), std::sqrt(sum1))));
+    };
+
 
     // Compute pair-wise distances
     std::vector<std::vector<double>> enc_dist1        (streamlines.size(), std::vector<double>(streamlines.size(),NAN));
@@ -255,10 +293,11 @@ void run_modelTest()
     std::vector<double> enc_dec_hau_dist (streamlines.size());
     std::vector<double> enc_dec_mdf_dist (streamlines.size());
 
+
     auto getDistances = [&](NIBR::MT::TASK task) -> void {
         for (size_t i = 0; i < task.no; i++) {
-            enc_dist1[task.no][i]           = getOneSidedEncodedDistance(task.no,i);
-            enc_dist2[task.no][i]           = getTwoSidedEncodedDistance(task.no,i);
+            enc_dist1[task.no][i]           = model_type != "" ? getOneSidedEncodedDistance_newgen(task.no, i) : getOneSidedEncodedDistance(task.no, i);
+            enc_dist2[task.no][i]           = model_type != "" ? getTwoSidedEncodedDistance_newgen(task.no, i) : getTwoSidedEncodedDistance(task.no, i);
             hau_dist[task.no][i]            = getHausdorffDistance(streamlines[task.no], streamlines[i]);
             mdf_dist[task.no][i]            = getMDFDistance(streamlines[task.no], streamlines[i]);
         }
@@ -319,6 +358,8 @@ void modelTest(CLI::App* app)
         ->required();
 
     app->add_flag("--useCPU, -c",            useCPU,             "Use only CPU without checking any available GPUs.");
+
+    app->add_option("--model_type",    model_type,           "Type of input model");
 
     app->add_option("--numberOfThreads, -n", numberOfThreads,    "Number of threads.");
     app->add_option("--verbose, -v",         verbose,            "Verbose level. Options are \"quite\",\"fatal\",\"error\",\"warn\",\"info\" and \"debug\". Default=info");
