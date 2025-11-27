@@ -10,8 +10,8 @@ enableMatplotlib=ON # If enabled, make sure that your default Python environment
 Torch_DIR="/opt/libtorch/share/cmake/Torch"
 
 # Path to nibrary
-inc_path="../nibrary/build-static/install/include/nibrary_v0.4.2"
-lib_path="../nibrary/build-static/install/lib/nibrary_v0.4.2"
+inc_path="../nibrary/build-static/install/include/nibrary_v0.4.4"
+lib_path="../nibrary/build-static/install/lib/nibrary_v0.4.4"
 
 # Path to compiler
 c_compiler=/bin/gcc
