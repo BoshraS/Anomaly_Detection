@@ -1,4 +1,5 @@
 #include "cmd.h"
+#include <cstdint>
 
 using namespace NIBR;
 
@@ -14,6 +15,7 @@ namespace CMDARGS_MODELTEST {
     std::string verbose     = "info";
     bool force              = false;
     std::string model_type  = "";
+    int non_flip_amount     = -1;
 }
 
 using namespace CMDARGS_MODELTEST; 
@@ -185,7 +187,11 @@ void run_modelTest()
 
     NIBR::Tractogram tracObj = tractogram.getTractogram();
 
+    if(model_type == "" && non_flip_amount > 0){
+        disp(MSG_INFO,"model_type is not set but non_flip_amount is. Ignoring non_flip_amount");
 
+    }
+    
     // Original input streamline
     NIBR::StreamlineBatch  streamlines = resampleTractogram_withStepCount(tracObj, model.inpDim);
 
@@ -213,9 +219,16 @@ void run_modelTest()
 
     // return;
 
+
+
     int real_lat_dim = model.latDim;
     if (model_type != "") {
-        real_lat_dim = std::floor(model.latDim / 2);
+        if(non_flip_amount > 0) {
+            real_lat_dim = non_flip_amount;
+        } else {
+            real_lat_dim = std::floor(model.latDim / 2);
+        }
+        
     }
 
     // Define one-sided and two-sided distance functions in the latent space
@@ -358,6 +371,8 @@ void modelTest(CLI::App* app)
         ->required();
 
     app->add_flag("--useCPU, -c",            useCPU,             "Use only CPU without checking any available GPUs.");
+
+    app->add_option("--non_flip_amount", non_flip_amount, "In newgen models how many dims are non flipped in the beginning. Default: half");
 
     app->add_option("--model_type",    model_type,           "Type of input model");
 
