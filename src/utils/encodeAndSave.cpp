@@ -16,6 +16,11 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
 
     NIBR::Tractogram tracObj = _tractogram.getTractogram();
 
+    int latDimMultiplier = 2;
+    if(model.newGenSize > 0) {
+        latDimMultiplier = 1;
+    }
+
     // Template that deduces the type T (float, double, at::Half) from its argument.
     auto process_with_type = [&](auto type_placeholder) -> bool {
         
@@ -48,7 +53,7 @@ bool encodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
 
         for (const auto& encoded_batch : results) {
             for (const auto& encoded_streamline : encoded_batch) {
-                ofs.write(reinterpret_cast<const char*>(encoded_streamline.data()), 2 * model.latDim * sizeof(T));
+                ofs.write(reinterpret_cast<const char*>(encoded_streamline.data()), latDimMultiplier * model.latDim * sizeof(T));
             }
         }
         ofs.close();

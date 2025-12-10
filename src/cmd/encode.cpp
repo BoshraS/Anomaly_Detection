@@ -16,6 +16,7 @@ namespace CMDARGS_ENCODE {
     int numberOfThreads     =  0;
     std::string verbose     = "info";
     bool force              = false;
+    size_t newGenSize       = 0;
 }
 
 using namespace CMDARGS_ENCODE; 
@@ -41,7 +42,7 @@ void run_encode()
     }
 
     // Set model
-    StreamlineAutoencoder model = StreamlineAutoencoder(model_spec, useCPU);
+    StreamlineAutoencoder model = StreamlineAutoencoder(model_spec, useCPU, newGenSize);
     if (!model.isReady()) return;
 
     if (isFile) {
@@ -101,6 +102,8 @@ void encode(CLI::App* app)
     app->add_option("--model,-m",            model_spec,         "Input model, specified with the path to the Torch script file, followed by the input dimensions, latent space dimensions and data type (float or double). E.g. /model/test_model.pt 256 64 float");
 
     app->add_flag("--skip, -s",              skip,               "Skip if the output exists.");
+
+    app->add_option("--newGenSize",           newGenSize,       "Amount of non-flipped values in new gen models");
 
     app->add_option("--batchSize, -b",       batchSize,          "Batch size. Default: 512.");
     app->add_flag("--useCPU, -c",            useCPU,             "Use only CPU without checking any available GPUs.");

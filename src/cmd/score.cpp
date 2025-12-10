@@ -16,6 +16,7 @@ namespace CMDARGS_SCORE {
     int numberOfThreads     =  0;
     std::string verbose     = "info";
     bool force              = false;
+    size_t newGenSize       = 0;
 }
 
 using namespace CMDARGS_SCORE;
@@ -49,26 +50,32 @@ std::vector<float> makeFlat(const std::vector<std::vector<std::vector<float>>>& 
 
 // Reads latent representations of streamlines from .bin file
 std::vector<Eigen::VectorXf> readClusterCenters(const std::string& fname, StreamlineAutoencoder& model) {
+
     std::ifstream ifs(fname, std::ios::binary | std::ios::ate | std::ios::in);
     if (!ifs.is_open()) {
         disp(MSG_ERROR,"Failed to open file: %s", fname.c_str());
         return std::vector<Eigen::VectorXf>();
     }
 
+    int latDimMultiplier = 2;
+    if(model.newGenSize > 0) {
+        latDimMultiplier = 1;
+    }
+
     std::streampos fileSize = ifs.tellg(); // Move the file pointer to the end of file
-    int streamlineCount = fileSize / (sizeof(float) * 2 * model.latDim);
+    int streamlineCount = fileSize / (sizeof(float) * latDimMultiplier * model.latDim);
     ifs.seekg(0, std::ios::beg);           // Move the file pointer back to the beginning
 
     std::vector<Eigen::VectorXf> latent;
     latent.reserve(streamlineCount); // Reserve space for streamlineCount elements
 
     // Read all streamline data in a single operation
-    Eigen::VectorXf buffer(2 * model.latDim * streamlineCount);
-    ifs.read(reinterpret_cast<char*>(buffer.data()), sizeof(float) * 2 * model.latDim * streamlineCount);
+    Eigen::VectorXf buffer(latDimMultiplier * model.latDim * streamlineCount);
+    ifs.read(reinterpret_cast<char*>(buffer.data()), sizeof(float) * latDimMultiplier * model.latDim * streamlineCount);
 
     for (int s = 0; s < streamlineCount; s++) {
         // Map the first model.latDim elements to Eigen::VectorXf
-        Eigen::VectorXf lat = buffer.segment(s * 2 * model.latDim, model.latDim);
+        Eigen::VectorXf lat = buffer.segment(s * latDimMultiplier * model.latDim, model.latDim);
         latent.push_back(std::move(lat));
     }
     ifs.close();
@@ -106,8 +113,13 @@ void run_score()
         return;
     }
 
+
+    int latDimMultiplier = 2;
+    if(newGenSize > 0) {
+        latDimMultiplier = 1;
+    }
     // Set model
-    StreamlineAutoencoder model = StreamlineAutoencoder(model_spec, useCPU);
+    StreamlineAutoencoder model = StreamlineAutoencoder(model_spec, useCPU, newGenSize);
     if (!model.isReady()) return;
 
     // Initialize file reader for input latent representations
@@ -116,7 +128,7 @@ void run_score()
         disp(MSG_ERROR,"Failed to open file: %s", inp_path.c_str());
         return;
     }
-    int N = ifs.tellg() / (sizeof(float) * 2 * model.latDim); // Number of streamlines in the input file
+    int N = ifs.tellg() / (sizeof(float) * latDimMultiplier * model.latDim); // Number of streamlines in the input file
     ifs.seekg(0, std::ios::beg);
 
 
@@ -145,37 +157,44 @@ void run_score()
         int curBatchSize = ((batchNo+1)*batchSize < N) ? batchSize : (N-batchNo*batchSize);
 
         // Batch has twice the number of elements, one for the direct, one for the flipped representations
-        std::vector<Eigen::VectorXf> batch(2*curBatchSize);
+        // newgen models don't so we use latDimMultiplier
+        std::vector<Eigen::VectorXf> batch(latDimMultiplier*curBatchSize);
 
-        Eigen::VectorXf buffer(2 * model.latDim*curBatchSize);
-        ifs.read(reinterpret_cast<char*>(buffer.data()), 2 * model.latDim*sizeof(float)*curBatchSize);
+        Eigen::VectorXf buffer(latDimMultiplier * model.latDim*curBatchSize);
+        ifs.read(reinterpret_cast<char*>(buffer.data()), latDimMultiplier * model.latDim*sizeof(float)*curBatchSize);
 
         // Read latent representations from the input file
         for (int i = 0; i < curBatchSize; i++) {                
             // First model.latDim elements of the 2 * model.latDim-element segment
-            Eigen::VectorXf rep1 = buffer.segment(2 * model.latDim * i, model.latDim);
-            batch[2 * i] = std::move(rep1);
+            Eigen::VectorXf rep1 = buffer.segment(latDimMultiplier * model.latDim * i, model.latDim);
+            batch[latDimMultiplier * i] = std::move(rep1);
 
-            // Second model.latDim elements of the 2 * model.latDim-element segment
-            Eigen::VectorXf rep2 = buffer.segment(2 * model.latDim * i + model.latDim, model.latDim);
-            batch[2 * i + 1] = std::move(rep2);
+            if(newGenSize == 0){
+                // Second model.latDim elements of the 2 * model.latDim-element segment
+                Eigen::VectorXf rep2 = buffer.segment(2 * model.latDim * i + model.latDim, model.latDim);
+                batch[2 * i + 1] = std::move(rep2);
+            }
+            
         }
 
         auto calcScore = [&](NIBR::MT::TASK task) -> void {
 
             size_t closestCenterIndex1, closestCenterIndex2;
-            float  dist1, dist2;
+            float  dist1 = 0.0, dist2 = 0.0;
 
             nanoflann::KNNResultSet<float> resultSet1(1);
             resultSet1.init(&closestCenterIndex1, &dist1);
-            kdtree.findNeighbors(resultSet1,   batch[2*task.no].data(), nanoflann::SearchParameters());
+            kdtree.findNeighbors(resultSet1,   batch[latDimMultiplier*task.no].data(), nanoflann::SearchParameters());
 
-            nanoflann::KNNResultSet<float> resultSet2(1);
-            resultSet2.init(&closestCenterIndex2, &dist2);
-            kdtree.findNeighbors(resultSet2, batch[2*task.no+1].data(), nanoflann::SearchParameters());
+            if(newGenSize == 0){
+                nanoflann::KNNResultSet<float> resultSet2(1);
+                resultSet2.init(&closestCenterIndex2, &dist2);
+                kdtree.findNeighbors(resultSet2, batch[2*task.no+1].data(), nanoflann::SearchParameters());
+            }
+            
 
             // Approximate physical space distance by multiplying the average Euclidean distance by 5
-            if (dist1 < dist2) {
+            if (dist1 < dist2 || newGenSize > 0) {
                 scores  [task.no + batchNo * batchSize] = std::sqrt(dist1) * model.distScaler;
                 clusters[task.no + batchNo * batchSize] = closestCenterIndex1 + 1; // Adding one so min cluster label is 1
             } else {
@@ -239,6 +258,8 @@ void score(CLI::App* app)
      
     app->add_option("<output anomaly scores>", out_path,           "Output anomaly scores (.ano).")
         ->required();
+
+    app->add_option("--newGenSize",           newGenSize,       "Amount of non-flipped values in new gen models");
 
     app->add_option("<output cluster labels>", out_labels,         "Optional cluster label output (.clb).");
 

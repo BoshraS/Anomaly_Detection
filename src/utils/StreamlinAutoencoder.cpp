@@ -4,7 +4,7 @@
 using namespace NIBR;
 
 // Common initialization method
-void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, int _latDim, const std::string& dataType, double _distScaler, bool _useCPU) {
+void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, int _latDim, const std::string& dataType, double _distScaler, bool _useCPU, size_t _newGenSize) {
 
     moduleFile  = _moduleFile;
     inpDim      = _inpDim;
@@ -12,6 +12,7 @@ void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, in
     distScaler  = _distScaler;
     useCPU      = _useCPU;
     ready       = false;
+    newGenSize  = _newGenSize;
 
     // Set device
     device      = torch::kCPU;
@@ -78,10 +79,20 @@ void StreamlineAutoencoder::init(const std::string& _moduleFile, int _inpDim, in
 
 StreamlineAutoencoder::StreamlineAutoencoder(const std::tuple<std::string, int, int, std::string>& moduleSpec, bool _useCPU)
     : device(torch::kCPU), useCPU(_useCPU), ready(false) {
-    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), std::get<3>(moduleSpec), 1.0f, _useCPU);
+    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), std::get<3>(moduleSpec), 1.0f, _useCPU, 0);
+}
+
+StreamlineAutoencoder::StreamlineAutoencoder(const std::tuple<std::string, int, int, std::string>& moduleSpec, bool _useCPU, size_t _newGenSize)
+    : device(torch::kCPU), useCPU(_useCPU), ready(false) {
+    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), std::get<3>(moduleSpec), 1.0f, _useCPU, _newGenSize);
 }
 
 StreamlineAutoencoder::StreamlineAutoencoder(const std::tuple<std::string, int, int, std::string, double>& moduleSpec, bool _useCPU)
     : device(torch::kCPU), useCPU(_useCPU), ready(false) {
-    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), std::get<3>(moduleSpec), std::get<4>(moduleSpec), _useCPU);
+    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), std::get<3>(moduleSpec), std::get<4>(moduleSpec), _useCPU, 0);
+}
+
+StreamlineAutoencoder::StreamlineAutoencoder(const std::tuple<std::string, int, int, std::string, double>& moduleSpec, bool _useCPU, size_t _newGenSize)
+    : device(torch::kCPU), useCPU(_useCPU), ready(false) {
+    init(std::get<0>(moduleSpec), std::get<1>(moduleSpec), std::get<2>(moduleSpec), std::get<3>(moduleSpec), std::get<4>(moduleSpec), _useCPU, _newGenSize);
 }

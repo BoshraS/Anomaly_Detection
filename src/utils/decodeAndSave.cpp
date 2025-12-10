@@ -13,6 +13,13 @@ bool decodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
 
         using T = decltype(type_placeholder);
 
+        // Oldgen did encoding twice and saved encoded as 2 * latDim
+        // Newgen doesn't need 2x so we can assume the input bin doesn't have 2x
+        int latDimMultiplier = 2;
+        if(model.newGenSize > 0) {
+            latDimMultiplier = 1;
+        }
+
         // 1. Open and read the input latent file
         std::ifstream ifs(inp, std::ios::binary);
         if (!ifs.is_open()) {
@@ -26,12 +33,12 @@ bool decodeAndSave(std::string inp, std::string out, bool force, StreamlineAutoe
             return true; // Success, nothing to do.
         }
 
-        int N = ifs.tellg() / (sizeof(T) * 2 * model.latDim);
+        int N = ifs.tellg() / (sizeof(T) * latDimMultiplier * model.latDim);
         ifs.seekg(0, std::ios::beg);
 
-        std::vector<std::vector<T>> latent(N, std::vector<T>(2 * model.latDim));
+        std::vector<std::vector<T>> latent(N, std::vector<T>(latDimMultiplier * model.latDim));
         for (int i = 0; i < N; ++i) {
-            ifs.read(reinterpret_cast<char*>(latent[i].data()), 2 * model.latDim * sizeof(T));
+            ifs.read(reinterpret_cast<char*>(latent[i].data()), latDimMultiplier * model.latDim * sizeof(T));
         }
         ifs.close();
 

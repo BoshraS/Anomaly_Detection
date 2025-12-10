@@ -20,6 +20,7 @@ namespace CMDARGS_FINDCLUSTERCENTERS {
     int numberOfThreads     =  0;
     std::string verbose     = "info";
     bool force              = false;
+    size_t newGenSize       = 0;
 }
 
 using namespace CMDARGS_FINDCLUSTERCENTERS;
@@ -298,10 +299,12 @@ void run_findClusterCenters()
                 kdtree.findNeighbors(resultSet1, batch[task.no].data(),             nanoflann::SearchParameters());
                 if (squaredDistToClosestClusterCenter < adjMaxDist) return;
 
-                nanoflann::KNNResultSet<float> resultSet2(1);
-                resultSet2.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
-                kdtree.findNeighbors(resultSet2, batch[task.no].data()+model.latDim, nanoflann::SearchParameters());
-                if (squaredDistToClosestClusterCenter < adjMaxDist) return;
+                if(newGenSize > 0) {
+                    nanoflann::KNNResultSet<float> resultSet2(1);
+                    resultSet2.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
+                    kdtree.findNeighbors(resultSet2, batch[task.no].data()+model.latDim, nanoflann::SearchParameters());
+                    if (squaredDistToClosestClusterCenter < adjMaxDist) return;
+                }
             }
 
             unassigned[task.no].store(true);
@@ -323,10 +326,12 @@ void run_findClusterCenters()
                 localKdtree.findNeighbors(resultSet1, batch[rInd].data(),    nanoflann::SearchParameters());
                 if (squaredDistToClosestClusterCenter < adjMaxDist) return;
 
-                nanoflann::KNNResultSet<float> resultSet2(1);
-                resultSet2.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
-                localKdtree.findNeighbors(resultSet2, batch[rInd].data()+model.latDim, nanoflann::SearchParameters());
-                if (squaredDistToClosestClusterCenter < adjMaxDist) return;
+                if(newGenSize > 0) {
+                    nanoflann::KNNResultSet<float> resultSet2(1);
+                    resultSet2.init(&closestCenterIndex, &squaredDistToClosestClusterCenter);
+                    localKdtree.findNeighbors(resultSet2, batch[rInd].data()+model.latDim, nanoflann::SearchParameters());
+                    if (squaredDistToClosestClusterCenter < adjMaxDist) return;
+                }
             }
 
             {
@@ -339,9 +344,13 @@ void run_findClusterCenters()
 
                     for (int i = 0; i < model.latDim; i++) {
                         float d1 = (batch[rInd][i] - unassignedClusterCenters[ind][i]);
-                        float d2 = (batch[rInd][i] - unassignedClusterCenters[ind][i + model.latDim]);
                         sum1    += d1 * d1;
-                        sum2    += d2 * d2;
+                        // newgen models skip second distance calc
+                        if(newGenSize > 0) {
+                            float d2 = (batch[rInd][i] - unassignedClusterCenters[ind][i + model.latDim]);
+                            sum2    += d2 * d2;
+                        }
+                        
                     }
 
                     if (std::min(sum1,sum2) < adjMaxDist) {
@@ -471,6 +480,8 @@ void findClusterCenters(CLI::App* app)
     app->add_option("--miniBatchSize",       miniBatchSize,      "When using random batches, each batch is split into mini batches fetched contigously from a single file, miniBatchSize sets that value. Default: 1000");
 
     app->add_flag("--useCPU, -c",            useCPU,             "Use only CPU without checking any available GPUs.");
+
+    app->add_option("--newGenSize",           newGenSize,       "Amount of non-flipped values in new gen models");
 
     app->add_option("--numberOfThreads, -n", numberOfThreads,    "Number of threads.");
     app->add_option("--verbose, -v",         verbose,            "Verbose level. Options are \"quite\",\"fatal\",\"error\",\"warn\",\"info\" and \"debug\". Default=info");
